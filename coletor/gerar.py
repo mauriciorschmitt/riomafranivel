@@ -74,7 +74,12 @@ def gerar_cidade(slug: str) -> dict:
     except RuntimeError as erro:
         avisos.append(f"GloFAS: {erro}")
 
-    modelo = base.ler_json(base.pasta(slug) / "modelo.json") or mod.modelo_heuristico(config.get("previsao", {}))
+    modelo = base.ler_json(base.pasta(slug) / "modelo.json")
+    if not mod.compativel(modelo):
+        motivo = "modelo salvo por uma versão anterior; rode \"Treinar modelo\"" if modelo else "modelo ainda não treinado"
+        if modelo:
+            avisos.append(f"Previsão: {motivo}.")
+        modelo = mod.modelo_heuristico(config.get("previsao", {}), motivo)
     bruto = {
         "agora": agora,
         "telemetria": telemetria,
