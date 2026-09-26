@@ -146,3 +146,84 @@ def test_faixa_empirica_assimetrica():
     prev = mod.prever(modelo, agora.date(), 5.0, treino["niveis"], treino["chuva"], cota_inundacao=7.0)
     for p in prev:
         assert p["max"] - p["media"] >= p["media"] - p["min"]
+
+
+# ------------------------------------------------------------------ COPEL
+from pathlib import Path
+
+from coletor import copel
+
+DADOS_TESTE = Path(__file__).parent / "dados"
+
+
+class _Resposta:
+    def __init__(self, texto):
+        self.text = texto
+
+    def raise_for_status(self):
+        pass
+
+
+class _SessaoFalsa:
+    """Imita o servidor da COPEL com a página e as respostas reais gravadas."""
+
+    def __init__(self):
+        self.headers = {}
+        self.posts = []
+
+    def get(self, url, **kw):
+        return _Resposta((DADOS_TESTE / "copel_pagina.html").read_text(encoding="utf-8"))
+
+    def post(self, url, data=None, **kw):
+        self.posts.append(data)
+        origem = data["javax.faces.source"]
+        if origem.endswith(":janela"):
+            arquivo = "copel_fragosos.xml" if origem.startswith("j_idt164:9:") else "copel_rionegro.xml"
+            return _Resposta((DADOS_TESTE / arquivo).read_text(encoding="utf-8"))
+        if "dataInicialPonto_input" in " ".join(data):
+            # resposta do botão "Atualizar": a mesma tabela
+            arquivo = "copel_fragosos.xml" if origem.startswith("j_idt164:9:") else "copel_rionegro.xml"
+            return _Resposta((DADOS_TESTE / arquivo).read_text(encoding="utf-8"))
+        return _Resposta("<partial-response><changes></changes></partial-response>")
+
+
+def test_copel_acha_estacoes_na_pagina():
+    pagina = (DADOS_TESTE / "copel_pagina.html").read_text(encoding="utf-8")
+    est = copel.mapear_estacoes(pagina)
+    assert {"fragosos", "rio negro", "sao bento", "uniao da vitoria"} <= set(est)
+    assert est["fragosos"]["form"] == "j_idt164:9:formDialog"
+    assert est["fragosos"]["link"].startswith("form:")
+
+
+def test_copel_coleta_fragosos_como_o_navegador():
+    sessao = _SessaoFalsa()
+    cliente = copel.Cliente(sessao)
+    leituras = cliente.recentes("Fragosos")
+    assert len(leituras) == 73
+    ultima = leituras[-1]
+    assert ultima["hora"] == dt.datetime(2026, 9, 26, 16)
+    assert ultima["nivel_m"] == 2.968 and ultima["vazao_m3s"] == 48.6 and ultima["chuva_mm"] == 0.0
+    # 1º pedido: clique na lista; 2º: carga do diálogo
+    assert sessao.posts[0]["javax.faces.source"].startswith("form:")
+    assert sessao.posts[1]["j_idt164:9:formDialog:janela_contentLoad"] == "true"
+    assert all(p["javax.faces.ViewState"] == "6588907434319500852:2981915742836487924" for p in sessao.posts)
+
+
+def test_copel_consulta_por_datas_usa_formato_da_pagina():
+    sessao = _SessaoFalsa()
+    cliente = copel.Cliente(sessao)
+    leituras = cliente.leituras("rio negro", dt.datetime(2026, 9, 25, 0), dt.datetime(2026, 9, 26, 16))
+    consulta = sessao.posts[-1]
+    assert consulta["javax.faces.source"] == "j_idt164:21:formDialog:j_idt173"
+    assert consulta["j_idt164:21:formDialog:dataInicialPonto_input"] == "25/09/2026 00"
+    assert leituras[-1]["nivel_m"] == 5.008 and leituras[0]["hora"] == dt.datetime(2026, 9, 25, 0)
+
+
+def test_copel_estacao_inexistente_lista_as_disponiveis():
+    cliente = copel.Cliente(_SessaoFalsa())
+    try:
+        cliente.recentes("Estação Que Não Existe")
+    except RuntimeError as erro:
+        assert "Fragosos" in str(erro)
+    else:
+        raise AssertionError("deveria falhar")
