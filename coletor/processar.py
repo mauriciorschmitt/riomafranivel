@@ -140,6 +140,7 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
         modelo, hoje, ultima["nivel"], medias_diarias, chuva_bacia, montante_diario,
         cota_inundacao=cota_inundacao, fator_incerteza=float(cfg_prev.get("fator_incerteza", 1.3)),
         crescimento_diario=float(cfg_prev.get("crescimento_incerteza_dia", 0.15)),
+        fator_empirico=float(cfg_prev.get("fator_incerteza_empirico", 1.0)),
     )
     horaria = mod.projecao_horaria(ultima["hora"], ultima["nivel"], tendencia or 0.0, diaria, horas=48)
 
