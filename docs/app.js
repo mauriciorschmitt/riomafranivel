@@ -495,7 +495,10 @@
       const sel = v == null ? "sem dado" : v > 0.1 ? "subindo" : v < -0.1 ? "baixando" : "estável";
       linhas.push({
         t: `Rio acima (${f.montante.nome})`,
-        p: `${fmt(f.montante.nivel)} m${v != null ? `, ${v >= 0 ? "+" : ""}${fmt(v)} m em 24 h` : ""}. A água leva cerca de ${f.montante.atraso_horas ?? "?"} h para chegar aqui.`,
+        p: `${fmt(f.montante.nivel)} m às ${f.montante.hora ? hora(f.montante.hora) : "?"}${v != null ? `, ${v >= 0 ? "+" : ""}${fmt(v)} m em 24 h` : ""} (${f.montante.fonte || "ANA"}). ` +
+          (f.montante.no_modelo
+            ? `A cheia leva cerca de ${f.montante.atraso_horas ?? "?"} h para chegar aqui, e o modelo usa essa subida como aviso antecipado.`
+            : "Ainda juntando histórico desta estação; ela entra no cálculo da previsão quando houver dados suficientes."),
         selo: sel, st: sel === "subindo" ? "alerta" : "normal",
       });
     }
@@ -645,7 +648,9 @@
     const c = D.config;
     const gerado = dataLocal(D.gerado_em);
     const partes = [
-      `<p>Nível: telemetria da Agência Nacional de Águas (ANA), estação ${esc(c.estacao.codigo)}. Chuva, previsão do tempo e umidade do solo: Open-Meteo. Vazão prevista: GloFAS (Copernicus), via Open-Meteo.</p>`,
+      `<p>Nível: telemetria da Agência Nacional de Águas (ANA), estação ${esc(c.estacao.codigo)}${c.estacao.copel ? `, com reserva no Monitoramento Hidrológico da COPEL (${esc(c.estacao.copel)})` : ""}.${
+        (c.montante || []).filter((m) => m.estacao_copel || m.codigo).map((m) => ` Rio acima: ${esc(m.nome)} (${m.estacao_copel ? "COPEL" : `ANA ${esc(m.codigo)}`}).`).join("")
+      } Chuva, previsão do tempo e umidade do solo: Open-Meteo. Vazão prevista: GloFAS (Copernicus), via Open-Meteo. Dados de telemetria não consistidos.</p>`,
       `<p>Página gerada em ${gerado.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}. Os dados são atualizados automaticamente a cada 30 minutos.</p>`,
       `<p>Este painel é informativo e não substitui os alertas oficiais. Em situação de risco, siga a Defesa Civil.</p>`,
     ];
