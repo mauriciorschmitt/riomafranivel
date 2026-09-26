@@ -1,0 +1,28 @@
+name: Buscar estação
+
+on:
+  workflow_dispatch:
+    inputs:
+      texto:
+        description: "Nome da estação, município ou rio"
+        required: true
+        default: "fragosos"
+      uf:
+        description: "Sigla do estado (deixe vazio para todos)"
+        required: false
+        default: ""
+
+jobs:
+  buscar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r coletor/requirements.txt
+      - name: Buscar
+        env:
+          TEXTO: ${{ inputs.texto }}
+          UF: ${{ inputs.uf }}
+        run: python ferramentas/buscar_estacoes.py "$TEXTO" --uf "$UF"
