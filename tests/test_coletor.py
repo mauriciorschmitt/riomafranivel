@@ -74,8 +74,10 @@ def test_modelo_calibra_e_faixas_crescem():
     assert modelo["tipo"] == "calibrado"
     assert modelo["rmse_horizonte"][0] < 0.6
     prev = mod.prever(modelo, agora.date(), 5.0, treino["niveis"], treino["chuva"], cota_inundacao=7.0)
-    larguras = [p["max"] - p["min"] for p in prev]
-    assert len(prev) == 7 and larguras == sorted(larguras)
+    # a margem para cima nunca diminui (a de baixo pode encostar no nível mínimo já registrado)
+    acima = [p["max"] - p["media"] for p in prev]
+    assert len(prev) == 7 and all(b >= a - 0.011 for a, b in zip(acima, acima[1:]))
+    assert all(p["min"] <= p["media"] <= p["max"] for p in prev)
     assert all(0 <= p["prob_inundacao"] <= 1 for p in prev)
 
 
@@ -89,7 +91,7 @@ def test_poucos_dados_usa_heuristico():
 
 
 def test_projecao_horaria_comeca_no_nivel_atual():
-    diaria = [{"media": 4.0, "desvio": 0.3}, {"media": 3.5, "desvio": 0.4}]
+    diaria = [{"media": 4.0, "min": 3.8, "max": 4.5}, {"media": 3.5, "min": 3.2, "max": 4.4}]
     h = mod.projecao_horaria(dt.datetime(2026, 9, 26, 10), 5.0, -0.03, diaria)
     assert len(h) == 48
     assert abs(h[0]["media"] - 4.97) < 0.05
@@ -123,3 +125,24 @@ def test_offset_da_estacao():
     saida = processar(cfg, bruto, mod.modelo_heuristico({}), maximas)
     bruto_nivel = [l for l in bruto["telemetria"] if l["nivel_m"] is not None][-1]["nivel_m"]
     assert abs(saida["atual"]["nivel"] - (bruto_nivel + 0.5)) < 0.01
+
+
+def test_limpeza_remove_codigo_de_erro_e_pico_isolado():
+    t0 = dt.datetime(2025, 1, 22, 12)
+    niveis = [1.28, 1.28, 1.29, 7777.777, 1.30, 1.31, 3.9, 1.32, 1.33, 1.34]
+    leituras = [{"hora": t0 + dt.timedelta(hours=i), "nivel_m": n, "chuva_mm": 0, "vazao_m3s": None} for i, n in enumerate(niveis)]
+    limpas = base.limpar_leituras(leituras)
+    assert [l["nivel_m"] for l in limpas] == [1.28, 1.28, 1.29, 1.30, 1.31, 1.32, 1.33, 1.34]
+    # subida real (várias leituras seguidas) não é removida
+    subida = [{"hora": t0 + dt.timedelta(hours=i), "nivel_m": 1.0 + 0.6 * i, "chuva_mm": 0, "vazao_m3s": None} for i in range(8)]
+    assert len(base.limpar_leituras(subida)) == 8
+
+
+def test_faixa_empirica_assimetrica():
+    cfg, agora, bruto, maximas, treino = _dados_demo()
+    modelo = mod.treinar(treino["niveis"], treino["chuva"])
+    # simula um modelo que sempre subestima subidas: erros negativos grandes
+    modelo["erros_validacao"] = [[[c, -abs(e) * 3] for c, e in p] for p in modelo["erros_validacao"]]
+    prev = mod.prever(modelo, agora.date(), 5.0, treino["niveis"], treino["chuva"], cota_inundacao=7.0)
+    for p in prev:
+        assert p["max"] - p["media"] >= p["media"] - p["min"]
