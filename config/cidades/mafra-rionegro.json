@@ -3,8 +3,8 @@
   "nome_app": "Alerta Rio Negro",
   "local": "Rio Negro (PR) e Mafra (SC)",
   "rio": "Rio Negro",
-  "url_site": "",
-  "repositorio": "",
+  "url_site": "https://mauriciorschmitt.github.io/riomafranivel/",
+  "repositorio": "https://github.com/mauriciorschmitt/riomafranivel",
 
   "estacao": {
     "codigo": "65100001",
@@ -14,16 +14,17 @@
     "lon": -49.797,
     "offset_m": 0.0,
     "ajuste_fuso_horas": 0,
-    "_nota": "ajuste_fuso_horas: use -3 se a ANA estiver informando a hora em UTC. offset_m corrige a diferença entre a régua da ANA e a régua usada pela Defesa Civil, se houver."
+    "copel": "Rio Negro",
+    "_nota": "copel: nome da mesma estação no site da COPEL, usada como reserva quando a ANA atrasa. ajuste_fuso_horas: use -3 se a ANA estiver informando a hora em UTC. offset_m corrige a diferença entre a régua da ANA e a régua usada pela Defesa Civil, se houver."
   },
 
   "montante": [
     {
-      "codigo": "",
+      "estacao_copel": "Fragosos",
       "nome": "Fragosos",
       "atraso_horas": 48,
       "offset_m": 0.0,
-      "_nota": "Preencha o código ANA da estação rio acima (consulte o HidroWeb). Vazio = não usado."
+      "_nota": "Estação rio acima, lida do site da COPEL. O treino mede o atraso real e só usa a estação se ela melhorar a previsão."
     }
   ],
 
