@@ -1,0 +1,24 @@
+name: Testar COPEL
+
+on:
+  workflow_dispatch:
+    inputs:
+      estacao:
+        description: "Nome da estação no site da COPEL"
+        required: true
+        default: "Fragosos"
+
+jobs:
+  testar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r coletor/requirements.txt
+      - name: Testar
+        env:
+          COPEL_DEPURAR: "1"
+          ESTACAO: ${{ inputs.estacao }}
+        run: python -m coletor.copel "$ESTACAO"
