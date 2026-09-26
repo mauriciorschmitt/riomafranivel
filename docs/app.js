@@ -149,7 +149,7 @@
     const atual = D.atual.nivel;
     const itens = [...(cfg.regua || [])].sort((a, b) => a.cota - b.cota);
     const topo = Math.max(cfg.cotas.maximo_regua || 0, ...itens.map((i) => i.cota + 0.6), atual + 1);
-    const base = Math.max(0, Math.floor(Math.min(itens[0]?.cota ?? atual, atual) - 1));
+    let base = Math.max(0, Math.floor(Math.min(itens[0]?.cota ?? atual, atual) - 1));
     const estreito = el.clientWidth < 420;
     const X = estreito ? 84 : 104; // onde começam os rótulos
     const GAP = 6;
@@ -171,21 +171,28 @@
         `<div><span class="marco-cota">${fmt(it.cota)} m</span><span class="marco-titulo">${esc(it.titulo)}</span>` +
         (i === idxAgora ? `<span class="marco-agora-tag">O rio está aqui</span>` : "") +
         `</div>${it.texto ? `<p class="marco-texto">${esc(it.texto)}</p>` : ""}` +
-        (i === idxAgora && prox ? `<p class="marco-proximo">Próximo marco: ${esc(prox.titulo.toLowerCase())}, faltam ${fmt(prox.cota - atual)} m.</p>` : "");
+        (i === idxAgora && prox ? `<p class="marco-proximo">Próximo marco (${fmt(prox.cota)} m): ${esc(prox.titulo)}. Faltam ${fmt(prox.cota - atual)} m.</p>` : "");
       m.style.left = `${X}px`;
       m.style.top = "0px";
       el.appendChild(m);
       return { it, m };
     });
 
-    // altura necessária para caber tudo
-    const alturas = marcos.map(({ m }) => m.offsetHeight);
-    const soma = alturas.reduce((a, b) => a + b + GAP, 0);
-    const H = Math.max(window.innerWidth < 560 ? 640 : 700, Math.ceil(soma * 1.15) + 60);
-    el.style.height = `${H}px`;
-    const PAD = 14;
-    const y = (c) => PAD + ((topo - c) / (topo - base)) * (H - 2 * PAD);
+    // Escala linear (a régua continua "em escala"). Se os marcos acima ou abaixo
+    // da água não couberem no espaço proporcional, abre espaço extra no topo ou
+    // estende a régua para baixo, em vez de deixar rótulos cruzarem a linha d'água.
+    const acima = marcos.filter((o) => o.it.cota > atual);
+    const abaixo = marcos.filter((o) => o.it.cota <= atual);
+    const somaGrupo = (g) => g.reduce((s, o) => s + o.m.offsetHeight + GAP, 0);
+    const H0 = Math.max(window.innerWidth < 560 ? 640 : 700, Math.ceil(somaGrupo(marcos) * 1.15) + 60);
+    const PAD = 14, FOLGA_SUP = 30, FOLGA_INF = 10;
+    const escala = (H0 - 2 * PAD) / (topo - base); // px por metro
+    const extraTopo = Math.max(0, somaGrupo(acima) + FOLGA_SUP - (PAD + (topo - atual) * escala));
+    const y = (c) => PAD + extraTopo + (topo - c) * escala;
     const yAgua = y(atual);
+    const H = Math.ceil(Math.max(H0 + extraTopo, yAgua + FOLGA_INF + somaGrupo(abaixo) + PAD));
+    base = Math.max(0, topo - (H - 2 * PAD - extraTopo) / escala); // régua desce até o fim da área
+    el.style.height = `${H}px`;
     agua.style.top = `${yAgua}px`;
     const rotuloAgua = document.createElement("span");
     rotuloAgua.className = "regua-agua-rotulo";
@@ -207,9 +214,7 @@
       g.forEach((o) => { o.top = Math.max(limiteSup, o.top); o.m.style.top = `${o.top}px`; o.centro = o.top + Math.min(o.h / 2, 14); });
       return true;
     }
-    const acima = marcos.filter((o) => o.it.cota > atual);
-    const abaixo = marcos.filter((o) => o.it.cota <= atual);
-    const ok = distribuir(acima, 0, yAgua - 30) && distribuir(abaixo, yAgua + 10, H);
+    const ok = distribuir(acima, 0, yAgua - FOLGA_SUP) && distribuir(abaixo, yAgua + FOLGA_INF, H);
     if (!ok) distribuir(marcos, 0, H);
 
     // desenho da régua
