@@ -43,7 +43,17 @@ def buscador_ana(codigo: str, agora: dt.datetime, ajuste: float):
 
 
 def buscador_copel(cliente: copel.Cliente, estacao: str, agora: dt.datetime):
-    return lambda recente: cliente.recentes(estacao) if recente else cliente.historico(estacao, agora - dt.timedelta(days=30), agora)
+    """Base em dia: últimas 72 h. Base vazia ou atrasada: tenta 30 dias e, se a
+    consulta por datas falhar, fica com as 72 h que a página sempre mostra."""
+    def buscar(recente):
+        if recente:
+            return cliente.recentes(estacao)
+        try:
+            return cliente.historico(estacao, agora - dt.timedelta(days=30), agora)
+        except RuntimeError as erro:
+            print(f"     aviso: {erro} Usando as últimas 72 h.")
+            return cliente.recentes(estacao)
+    return buscar
 
 
 def atualizar_chuva(slug: str, previsao: dict, hoje: dt.date) -> dict[str, float]:
