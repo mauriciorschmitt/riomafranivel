@@ -126,9 +126,11 @@ def gerar_cidade(slug: str) -> dict:
         "previsao": previsao,
         "chuva_historica": chuva,
         "glofas": glofas,
+        "previsoes": base.ler_json(base.pasta(slug) / "previsoes.json", {}),
     }
     saida = processar(config, bruto, modelo, base.ler_maximas(slug, config))
     saida["avisos"] = avisos
+    base.guardar_previsao(slug, saida, agora)
     base.publicar(slug, saida)
     alertas.verificar(slug, saida)
     return saida

@@ -149,6 +149,29 @@ def salvar_json(caminho: Path, dados, compacto: bool = False) -> None:
             json.dump(dados, f, ensure_ascii=False, indent=2)
 
 
+HORA_BOLETIM = 7  # a previsão guardada para o placar é a primeira do dia a partir das 7h
+
+
+def guardar_previsao(slug: str, saida: dict, agora: dt.datetime) -> dict:
+    """Guarda uma previsão por dia (a das 7h) para depois comparar com o que o rio fez."""
+    caminho = pasta(slug) / "previsoes.json"
+    arquivo = ler_json(caminho, {})
+    hoje = agora.date().isoformat()
+    if agora.hour >= HORA_BOLETIM and hoje not in arquivo and not saida.get("demo"):
+        arquivo[hoje] = {
+            "emitida": saida["gerado_em"],
+            "nivel_atual": saida["atual"]["nivel"],
+            "dias": [
+                {k: d.get(k) for k in ("data", "media", "min", "max", "prob_inundacao")}
+                for d in saida["previsao_dias"][1:]
+            ],
+        }
+        limite = (agora.date() - dt.timedelta(days=400)).isoformat()
+        arquivo = {k: v for k, v in sorted(arquivo.items()) if k >= limite}
+        salvar_json(caminho, arquivo)
+    return arquivo
+
+
 def publicar(slug: str, saida: dict) -> Path:
     """Grava o JSON do painel e atualiza o índice de cidades do site."""
     destino = PASTA_SITE / "dados" / f"{slug}.json"

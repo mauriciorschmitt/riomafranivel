@@ -195,6 +195,21 @@ def treinar(niveis, chuva, montante=None, atraso=0, config_modelo=None) -> dict:
         pares = teste_retroativo(parcial, niveis, chuva, montante, atraso, datas[:-1])
     rmse = [float(np.sqrt(np.mean([e * e for _, e in p]))) if p else None for p in pares]
 
+    # comparação justa: o mesmo período, com o palpite "o rio fica como está hoje"
+    inicios_validacao = datas[corte:-1]
+    palpite = [[] for _ in range(HORIZONTE)]
+    for s0 in inicios_validacao:
+        for k in range(HORIZONTE):
+            alvo = s0 + dt.timedelta(days=k + 1)
+            if alvo in niveis:
+                palpite[k].append(abs(niveis[s0] - niveis[alvo]))
+    validacao = {
+        "periodo": [inicios_validacao[0].isoformat(), inicios_validacao[-1].isoformat()] if inicios_validacao else None,
+        "n_dias": len(inicios_validacao),
+        "erro_medio": [round(float(np.mean([abs(e) for _, e in p])), 3) if p else None for p in pares],
+        "erro_palpite": [round(float(np.mean(v)), 3) if v else None for v in palpite],
+    }
+
     final = _ajustar_ridge(X, y)
     rmse = _monotono([r if r is not None else 0.3 * (k + 1) for k, r in enumerate(rmse)])
     return {
@@ -204,6 +219,7 @@ def treinar(niveis, chuva, montante=None, atraso=0, config_modelo=None) -> dict:
         "nivel_minimo": float(min(niveis.values())),
         "rmse_horizonte": [round(r, 3) for r in rmse],
         "erros_validacao": [[[round(c, 1), round(e, 3)] for c, e in p] for p in pares],
+        "validacao": validacao,
         "n_dias": int(len(y)),
         "periodo": [datas[0].isoformat(), datas[-1].isoformat()],
         "treinado_em": dt.datetime.now().isoformat(timespec="minutes"),

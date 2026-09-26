@@ -91,6 +91,47 @@ def _classificar(valor, limites, rotulos):
 
 
 # ---------------------------------------------------------------- principal
+def placar(previsoes: dict, medias_diarias: dict, hoje: dt.date) -> dict:
+    """Compara as previsões guardadas (uma por dia) com a média observada de cada dia."""
+    horizontes = []
+    pares_1d, pares_3d = {}, {}
+    for k in range(7):
+        erros, palpite, dentro = [], [], []
+        for emitida, prev in previsoes.items():
+            if k >= len(prev["dias"]):
+                continue
+            d = prev["dias"][k]
+            alvo = dt.date.fromisoformat(d["data"])
+            if alvo >= hoje or alvo not in medias_diarias or d.get("media") is None:
+                continue
+            obs = medias_diarias[alvo]
+            erros.append(abs(d["media"] - obs))
+            palpite.append(abs(prev["nivel_atual"] - obs))
+            if d.get("min") is not None and d.get("max") is not None:
+                dentro.append(d["min"] <= obs <= d["max"])
+            if k == 0:
+                pares_1d[alvo] = (obs, d["media"])
+            if k == 2:
+                pares_3d[alvo] = d["media"]
+        horizontes.append({
+            "dias": k + 1,
+            "n": len(erros),
+            "erro_medio": round(statistics.fmean(erros), 3) if erros else None,
+            "erro_palpite": round(statistics.fmean(palpite), 3) if palpite else None,
+            "na_faixa": round(sum(dentro) / len(dentro), 3) if dentro else None,
+        })
+    serie = [
+        [d.isoformat(), round(obs, 2), round(prev1, 2), None if d not in pares_3d else round(pares_3d[d], 2)]
+        for d, (obs, prev1) in sorted(pares_1d.items())
+    ][-60:]
+    return {
+        "desde": min(previsoes) if previsoes else None,
+        "n_previsoes": len(previsoes),
+        "horizontes": horizontes,
+        "serie": serie,
+    }
+
+
 def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int, float]) -> dict:
     agora: dt.datetime = bruto["agora"]
     hoje = agora.date()
@@ -239,6 +280,10 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
         },
         "serie_horaria": horaria_30d,
         "serie_diaria_max": [[d.isoformat(), round(v, 2)] for d, v in ultimos_365.items()],
+        "serie_diaria_media": [
+            [d.isoformat(), round(v, 2)] for d, v in medias_diarias.items() if d >= hoje - dt.timedelta(days=30)
+        ],
+        "placar": placar(bruto.get("previsoes") or {}, medias_diarias, hoje),
         "chuva_diaria": chuva_diaria,
         "previsao_horaria": horaria,
         "previsao_dias": dias_previsao,
@@ -255,7 +300,7 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
         "extremos": extremos,
         "modelo": {
             k: modelo.get(k)
-            for k in ("tipo", "n_dias", "periodo", "treinado_em", "rmse_horizonte", "motivo")
+            for k in ("tipo", "n_dias", "periodo", "treinado_em", "rmse_horizonte", "motivo", "validacao")
             if modelo.get(k) is not None
         },
     }
