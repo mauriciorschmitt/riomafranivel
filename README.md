@@ -25,6 +25,7 @@ Custo: zero. Não precisa de servidor, banco de dados, chave de API nem sensor p
 | Open-Meteo, previsão | Chuva, temperatura e umidade do solo, 8 dias, em vários pontos da bacia | Gratuito, sem chave |
 | Open-Meteo, reanálise | Chuva diária histórica, para treinar o modelo | Gratuito, sem chave |
 | GloFAS (via Open-Meteo) | Vazão prevista para 30 dias pelo sistema europeu | Gratuito, sem chave |
+| COPEL, Monitoramento Hidrológico | Estações horárias da bacia do Iguaçu (inclui algumas que não estão na ANA) | Página pública, sem cadastro |
 
 ## A previsão
 
@@ -83,7 +84,8 @@ Cada arquivo em `config/cidades/` vira uma cidade no mesmo site, com um seletor 
 | `estacao.codigo_convencional` | Estação convencional no mesmo local, com série histórica longa. Costuma ter o código terminado em 0 |
 | `estacao.offset_m` | Diferença entre a régua da ANA e a régua usada pela Defesa Civil, se houver |
 | `estacao.ajuste_fuso_horas` | Use `-3` se as horas da ANA estiverem vindo em UTC (compare com o HidroTelemetria) |
-| `montante` | Estação rio acima e quantas horas a água leva para chegar. Melhora muito a previsão de curto prazo |
+| `estacao.copel` | Nome da mesma estação no site da COPEL, usada como reserva quando a ANA atrasa (bacia do Iguaçu) |
+| `montante` | Estação rio acima: `codigo` (ANA) ou `estacao_copel` (nome no site da COPEL). O treino mede sozinho quantos dias a cheia leva para chegar e só usa a estação se ela melhorar a previsão |
 | `bacia.pontos` | Pontos onde a chuva é consultada. O primeiro é a cidade; espalhe os demais pela bacia, principalmente rio acima |
 | `cotas.faixas` | Cotas de atenção, alerta, emergência etc. Use as cotas oficiais do município |
 | `regua` | O que acontece na cidade em cada nível (ruas, pontes, bairros). É a parte mais útil para o morador: vale construir com a Defesa Civil |
@@ -93,6 +95,12 @@ Cada arquivo em `config/cidades/` vira uma cidade no mesmo site, com um seletor 
 | `contatos` | Defesa Civil municipal e abrigos. Itens sem telefone ou sem nome não aparecem |
 
 Os níveis de impacto, pontes e cheias de Rio Negro/Mafra no exemplo vieram de um painel de terceiros e **precisam ser conferidos com a Defesa Civil** antes de o site ir ao ar. Os contatos municipais estão em branco de propósito.
+
+## Estações da COPEL
+
+Na bacia do Iguaçu (que inclui o Rio Negro), a COPEL publica estações horárias em https://www.copel.com/mhbweb/paginas/bacia-iguacu.jsf. Algumas, como Fragosos, não aparecem na ANA. Para ver os nomes disponíveis: `python -m coletor.copel`; para as últimas leituras de uma: `python -m coletor.copel Fragosos`.
+
+A página não tem API: o coletor imita os cliques (abrir a estação e pedir a tabela) e acha os campos pelo nome da estação, então pequenas mudanças no site não quebram a coleta. Se a COPEL mudar a página a fundo, o coletor avisa no log e o painel continua funcionando com a ANA. Os dados de uma estação nova de rio acima entram no modelo depois de 90 dias acumulados junto com a estação principal.
 
 ## Alertas no Telegram (opcional)
 
