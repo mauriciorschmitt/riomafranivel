@@ -449,7 +449,7 @@
     else if (codigo <= 67) { corpo = nuvem + gotas; nome = codigo >= 65 ? "Chuva forte" : codigo >= 63 ? "Chuva moderada" : "Chuva fraca"; }
     else if (codigo <= 77) { corpo = nuvem; nome = "Neve"; }
     else if (codigo <= 82) { corpo = nuvem + gotas; nome = codigo === 82 ? "Pancadas fortes" : "Pancadas de chuva"; }
-    else { corpo = nuvem + raio; nome = codigo >= 96 ? "Temporal com granizo" : "Temporal"; }
+    else { corpo = nuvem + raio; nome = "Temporal"; } // códigos de granizo (96/99) não são confiáveis fora da Europa
     return `<svg viewBox="0 0 32 32" aria-hidden="true">${corpo}</svg><span>${nome}</span>`;
   }
 
