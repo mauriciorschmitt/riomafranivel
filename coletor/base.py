@@ -125,12 +125,13 @@ def ler_maximas(slug: str, config: dict) -> dict[int, float]:
     return dict(sorted(maximas.items()))
 
 
-def salvar_maximas(slug: str, maximas: dict[int, float]) -> None:
+def salvar_maximas(slug: str, maximas: dict[int, float], fontes: dict[int, str] | None = None) -> None:
+    fontes = fontes or {}
     with open(pasta(slug) / "maximas_anuais.csv", "w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["ano", "cota_m"])
+        w.writerow(["ano", "cota_m", "fonte"])
         for ano, cota in sorted(maximas.items()):
-            w.writerow([ano, round(cota, 3)])
+            w.writerow([ano, round(cota, 3), fontes.get(ano, "")])
 
 
 def ler_json(caminho: Path, padrao=None):
