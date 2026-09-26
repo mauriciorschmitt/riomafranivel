@@ -49,9 +49,12 @@ def completar_chuva(slug, pontos, dias, hoje):
     ]
     if len(faltando) > 3:
         print(f"  baixando chuva histórica de {faltando[0]} a {faltando[-1]}...")
-        historico = openmeteo.chuva_historica_bacia(pontos, faltando[0], faltando[-1])
-        chuva.update({k: round(v, 1) for k, v in historico.items()})
-        base.salvar_json(caminho, dict(sorted(chuva.items())))
+        try:
+            historico = openmeteo.chuva_historica_bacia(pontos, faltando[0], faltando[-1])
+            chuva.update({k: round(v, 1) for k, v in historico.items()})
+            base.salvar_json(caminho, dict(sorted(chuva.items())))
+        except RuntimeError as erro:
+            print(f"  aviso: {erro}")
     return chuva
 
 
