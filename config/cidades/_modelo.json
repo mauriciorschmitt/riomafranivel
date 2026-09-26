@@ -1,0 +1,124 @@
+{
+  "_leia": "Copie este arquivo para config/cidades/<nome-da-cidade>.json e preencha. Campos com _ no início são só comentários. Arquivos que começam com _ são ignorados.",
+  "slug": "nome-da-cidade",
+  "nome_app": "Alerta Rio X",
+  "local": "Cidade (SC)",
+  "rio": "Rio X",
+  "url_site": "",
+  "repositorio": "",
+  "estacao": {
+    "codigo": "00000000",
+    "codigo_convencional": "",
+    "nome": "",
+    "lat": -27.0,
+    "lon": -49.0,
+    "offset_m": 0.0,
+    "_nota": "Código da estação telemétrica da ANA (python ferramentas/buscar_estacoes.py <cidade>)."
+  },
+  "montante": [
+    {
+      "codigo": "",
+      "nome": "",
+      "atraso_horas": 24,
+      "offset_m": 0.0,
+      "_nota": "Opcional: estação rio acima."
+    }
+  ],
+  "bacia": {
+    "_nota": "O primeiro ponto é a cidade. Adicione 2 a 5 pontos espalhados pela bacia, principalmente rio acima.",
+    "pontos": [
+      {
+        "nome": "Cidade",
+        "lat": -27.0,
+        "lon": -49.0,
+        "peso": 1.0
+      }
+    ]
+  },
+  "cotas": {
+    "inundacao": 7.0,
+    "maximo_regua": 12.0,
+    "faixas": [
+      {
+        "id": "atencao",
+        "nome": "Atenção",
+        "cota": 5.0
+      },
+      {
+        "id": "alerta",
+        "nome": "Alerta",
+        "cota": 6.0
+      },
+      {
+        "id": "emergencia",
+        "nome": "Emergência",
+        "cota": 7.0
+      },
+      {
+        "id": "extremo",
+        "nome": "Extremo",
+        "cota": 10.0
+      }
+    ],
+    "_nota": "Use as cotas oficiais da Defesa Civil do município."
+  },
+  "regua": [
+    {
+      "cota": 3.0,
+      "titulo": "Leito normal",
+      "texto": ""
+    },
+    {
+      "cota": 7.0,
+      "titulo": "Primeiras casas atingidas",
+      "texto": "Quais ruas?"
+    }
+  ],
+  "pontes": [],
+  "cheias_historicas": [],
+  "maximas_anuais_extra": {},
+  "previsao": {
+    "dias_treino": 730,
+    "fator_incerteza": 1.3,
+    "crescimento_incerteza_dia": 0.15,
+    "limites_chuva_7d": [
+      40,
+      80,
+      150
+    ],
+    "limites_solo": [
+      0.3,
+      0.38,
+      0.45
+    ],
+    "heuristico": {
+      "nivel_base": 2.0,
+      "recessao": 0.15,
+      "resposta_amanha": 0.015,
+      "resposta_hoje": 0.035,
+      "resposta_ontem": 0.02
+    }
+  },
+  "alertas": {
+    "telegram_canal": ""
+  },
+  "contatos": {
+    "orgaos": [
+      {
+        "nome": "Defesa Civil de ...",
+        "descricao": "",
+        "fixo": "",
+        "plantao": ""
+      }
+    ],
+    "abrigos": [
+      {
+        "cidade": "",
+        "nome": "",
+        "endereco": "",
+        "capacidade": null,
+        "obs": ""
+      }
+    ]
+  }
+}

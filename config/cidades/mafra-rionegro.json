@@ -1,0 +1,114 @@
+{
+  "slug": "mafra-rionegro",
+  "nome_app": "Alerta Rio Negro",
+  "local": "Rio Negro (PR) e Mafra (SC)",
+  "rio": "Rio Negro",
+  "url_site": "",
+  "repositorio": "",
+
+  "estacao": {
+    "codigo": "65100001",
+    "codigo_convencional": "65100000",
+    "nome": "Rio Negro",
+    "lat": -26.106,
+    "lon": -49.797,
+    "offset_m": 0.0,
+    "ajuste_fuso_horas": 0,
+    "_nota": "ajuste_fuso_horas: use -3 se a ANA estiver informando a hora em UTC. offset_m corrige a diferença entre a régua da ANA e a régua usada pela Defesa Civil, se houver."
+  },
+
+  "montante": [
+    {
+      "codigo": "",
+      "nome": "Fragosos",
+      "atraso_horas": 48,
+      "offset_m": 0.0,
+      "_nota": "Preencha o código ANA da estação rio acima (consulte o HidroWeb). Vazio = não usado."
+    }
+  ],
+
+  "bacia": {
+    "_nota": "Pontos onde a chuva é consultada. O primeiro deve ser a própria cidade. Coordenadas aproximadas: ajuste para a sua bacia.",
+    "pontos": [
+      { "nome": "Rio Negro", "lat": -26.106, "lon": -49.797, "peso": 1.0 },
+      { "nome": "Piên", "lat": -26.097, "lon": -49.432, "peso": 1.0 },
+      { "nome": "Campo Alegre", "lat": -26.195, "lon": -49.265, "peso": 1.0 },
+      { "nome": "Rio Negrinho", "lat": -26.254, "lon": -49.518, "peso": 0.7 }
+    ]
+  },
+
+  "cotas": {
+    "inundacao": 7.0,
+    "maximo_regua": 16.0,
+    "faixas": [
+      { "id": "atencao", "nome": "Atenção", "cota": 5.0 },
+      { "id": "alerta", "nome": "Alerta", "cota": 6.0 },
+      { "id": "emergencia", "nome": "Emergência", "cota": 7.0 },
+      { "id": "extremo", "nome": "Extremo", "cota": 10.0 }
+    ]
+  },
+
+  "regua": [
+    { "cota": 4.0, "titulo": "Leito normal", "texto": "Rio dentro da calha, todas as pontes liberadas." },
+    { "cota": 5.0, "titulo": "Várzeas começam a alagar", "texto": "Água em parques, praças da orla e margens sem moradores. Defesa Civil passa a monitorar 24 h." },
+    { "cota": 6.5, "titulo": "Ponte do Passa Três interditada", "texto": "Primeiras interdições no Passa Três e na Volta Grande." },
+    { "cota": 7.0, "titulo": "Primeiras casas atingidas", "texto": "Rua São João, Vila Argentina e Volta Grande." },
+    { "cota": 8.5, "titulo": "Ponte Metálica bloqueada", "texto": "Cabeceiras da Ponte Dr. Diniz Assis Henning tomadas pela água." },
+    { "cota": 9.0, "titulo": "Refluxo no Passa Três e em Mafra", "texto": "Alagamento no Bom Jesus e na Av. Prefeito Frederico Heyse." },
+    { "cota": 10.93, "titulo": "Nível da cheia de outubro de 2023", "texto": "Centro comercial de Mafra e Praça João Pessoa alagados." },
+    { "cota": 13.68, "titulo": "Nível da cheia de junho de 2014", "texto": "Mais de 15 mil pessoas fora de casa." },
+    { "cota": 14.57, "titulo": "Nível da cheia de julho de 1983", "texto": "Maior cheia registrada. Planície urbana submersa." }
+  ],
+
+  "pontes": [
+    { "nome": "Ponte Metálica", "cota": 8.5 },
+    { "nome": "Ponte Severiano Maia", "cota": 10.5 },
+    { "nome": "Ponte Rodrigo Ajuz", "cota": 11.0 },
+    { "nome": "Ponte da BR-116", "cota": 15.0 }
+  ],
+
+  "cheias_historicas": [
+    { "data": "1983-07-13", "cota": 14.57, "texto": "Maior cheia registrada. Inundou toda a área central e isolou as duas cidades." },
+    { "data": "1992-06-02", "cota": 14.39, "texto": "Segunda maior cheia. Bairros inteiros submersos." },
+    { "data": "2014-06-11", "cota": 13.68, "texto": "Chuva forte nas cabeceiras e evacuação em massa das áreas ribeirinhas." },
+    { "data": "2023-10-15", "cota": 10.93, "texto": "Pontes interditadas e centenas de famílias fora de casa." },
+    { "data": "2010-04-29", "cota": 10.44, "texto": "Passou dos 10 metros e alagou bairros ribeirinhos e praças centrais." }
+  ],
+
+  "maximas_anuais_extra": {
+    "_nota": "Use para anos que faltam na série da ANA. Formato: \"ano\": cota_em_metros.",
+    "1983": 14.57,
+    "1992": 14.39,
+    "2014": 13.68
+  },
+
+  "previsao": {
+    "dias_treino": 730,
+    "fator_incerteza": 1.3,
+    "crescimento_incerteza_dia": 0.15,
+    "limites_chuva_7d": [40, 80, 150],
+    "limites_solo": [0.30, 0.38, 0.45],
+    "heuristico": {
+      "nivel_base": 2.0,
+      "recessao": 0.15,
+      "resposta_amanha": 0.015,
+      "resposta_hoje": 0.035,
+      "resposta_ontem": 0.02
+    }
+  },
+
+  "alertas": {
+    "telegram_canal": ""
+  },
+
+  "contatos": {
+    "_nota": "Confirme cada número com a prefeitura antes de publicar. Itens sem telefone ou sem nome não aparecem.",
+    "orgaos": [
+      { "nome": "Defesa Civil de Mafra", "descricao": "Abrigo e transporte de mudanças", "fixo": "", "plantao": "" },
+      { "nome": "Defesa Civil de Rio Negro", "descricao": "Plantão e sala de situação", "fixo": "", "plantao": "" }
+    ],
+    "abrigos": [
+      { "cidade": "Mafra", "nome": "", "endereco": "", "capacidade": null, "obs": "" }
+    ]
+  }
+}
