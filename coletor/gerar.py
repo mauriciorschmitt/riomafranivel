@@ -43,7 +43,7 @@ def buscador_ana(codigo: str, agora: dt.datetime, ajuste: float):
 
 
 def buscador_copel(cliente: copel.Cliente, estacao: str, agora: dt.datetime):
-    return lambda recente: cliente.recentes(estacao) if recente else cliente.historico(estacao, agora - dt.timedelta(days=60), agora)
+    return lambda recente: cliente.recentes(estacao) if recente else cliente.historico(estacao, agora - dt.timedelta(days=30), agora)
 
 
 def atualizar_chuva(slug: str, previsao: dict, hoje: dt.date) -> dict[str, float]:
