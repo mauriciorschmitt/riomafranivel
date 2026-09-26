@@ -18,6 +18,17 @@ PASTA_SITE = RAIZ / "docs"
 DIAS_GUARDADOS = 1100  # ~3 anos
 
 
+def chave_montante(m: dict) -> str | None:
+    """Identificador da estação rio acima: código ANA ou "copel-<nome>"."""
+    if m.get("codigo"):
+        return str(m["codigo"])
+    if m.get("estacao_copel"):
+        import unicodedata
+        nome = unicodedata.normalize("NFD", m["estacao_copel"]).encode("ascii", "ignore").decode().lower()
+        return "copel-" + "-".join(nome.split())
+    return None
+
+
 def pasta(slug: str) -> Path:
     p = PASTA_DADOS / slug
     p.mkdir(parents=True, exist_ok=True)
