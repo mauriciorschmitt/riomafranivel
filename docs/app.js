@@ -379,7 +379,8 @@
 
   function grafico7d() {
     destruir("7d");
-    const passados = D.serie_diaria_max.slice(-8, -1);
+    // a previsão é do nível médio do dia, então o passado também é a média (e não o máximo)
+    const passados = (D.serie_diaria_media || D.serie_diaria_max).slice(-8, -1);
     const futuros = D.previsao_dias.slice(1);
     const rotDatas = [...passados.map((p) => p[0]), D.previsao_dias[0].data, ...futuros.map((d) => d.data)];
     const rotulos = rotDatas.map((s) => dataCurta(s));
@@ -407,7 +408,7 @@
       data: {
         labels: rotulos,
         datasets: [
-          { type: "line", label: "Nível máximo do dia", data: observado, borderColor: css("--tinta"), borderWidth: 2.5, pointRadius: 3, tension: 0.35 },
+          { type: "line", label: D.serie_diaria_media ? "Nível médio do dia" : "Nível máximo do dia", data: observado, borderColor: css("--tinta"), borderWidth: 2.5, pointRadius: 3, tension: 0.35 },
           { type: "line", label: "Nível previsto", data: previsto, borderColor: agua, borderWidth: 2.5, borderDash: [6, 4], pointRadius: 3, tension: 0.35 },
           ...faixaDatasets(maxs, mins).map((d) => ({ ...d, type: "line", tension: 0.35 })),
           {
@@ -522,11 +523,56 @@
     $("#nota-modelo").innerHTML = nota;
   }
 
+  const cm = (m) => (m == null ? "–" : `${Math.round(m * 100)} cm`);
+
+  function renderPlacar() {
+    destruir("placar");
+    const el = $("#placar");
+    const partes = [];
+    const v = D.modelo?.validacao;
+    if (v?.erro_medio?.[0] != null) {
+      const [ini, fim] = v.periodo || [];
+      partes.push(`<p class="placar-teste"><strong>No teste com o passado</strong> (${v.n_dias} dias, de ${ini ? dataCurta(ini) + "/" + ini.slice(0, 4) : "?"} a ${fim ? dataCurta(fim) + "/" + fim.slice(0, 4) : "?"}), a previsão para o dia seguinte errou em média ${cm(v.erro_medio[0])}. O palpite "amanhã o rio fica igual a hoje" errou ${cm(v.erro_palpite[0])}. Esse teste usa a chuva que de fato caiu; com a chuva prevista, o erro real tende a ser um pouco maior. É isso que o placar abaixo mede.</p>`);
+    }
+    const p = D.placar;
+    const h = (p?.horizontes || []).filter((x) => x.n > 0);
+    if (!h.length) {
+      partes.push(`<p class="placar-vazio">O placar ao vivo começa a encher amanhã: a primeira previsão ${p?.desde ? `foi guardada em ${dataCurta(p.desde)}` : "é guardada hoje às 7h"}. Com algumas semanas dá para tirar conclusões; com a próxima cheia, dá para ver como ela se sai quando mais importa.</p>`);
+      el.innerHTML = partes.join("");
+      return;
+    }
+    partes.push(`<table class="tabela"><thead><tr><th scope="col">Previsão feita com</th><th scope="col">Erro médio</th><th scope="col">Palpite "igual a hoje"</th><th scope="col">Caiu dentro da faixa</th><th scope="col">Dias conferidos</th></tr></thead><tbody>${
+      h.map((x) => `<tr><td>${x.dias === 1 ? "1 dia" : `${x.dias} dias`} de antecedência</td>
+        <td class="${x.erro_medio <= x.erro_palpite ? "melhor" : "pior"}">${cm(x.erro_medio)}</td>
+        <td>${cm(x.erro_palpite)}</td>
+        <td>${x.na_faixa == null ? "–" : pct(x.na_faixa)} <small>(esperado: 80%)</small></td>
+        <td>${x.n}</td></tr>`).join("")
+    }</tbody></table>`);
+    partes.push(`<p class="explica">Em verde, quando a previsão errou menos que o palpite. Se a faixa acertar bem menos que 80% das vezes, ela está estreita demais; se acertar quase sempre, está larga demais.</p>`);
+    if ((p.serie || []).length >= 3) partes.push(`<div class="grafico"><canvas id="graf-placar" aria-label="Previsto e observado, dia a dia"></canvas></div>`);
+    el.innerHTML = partes.join("");
+    if ((p.serie || []).length >= 3 && typeof Chart !== "undefined") {
+      graficos.placar = new Chart($("#graf-placar"), {
+        type: "line",
+        data: {
+          labels: p.serie.map((x) => dataCurta(x[0])),
+          datasets: [
+            { label: "O que o rio fez (média do dia)", data: p.serie.map((x) => x[1]), borderColor: css("--tinta"), borderWidth: 2.5, pointRadius: 2, tension: 0.3 },
+            { label: "Previsto 1 dia antes", data: p.serie.map((x) => x[2]), borderColor: css("--agua"), borderWidth: 2, borderDash: [6, 4], pointRadius: 2, tension: 0.3 },
+            { label: "Previsto 3 dias antes", data: p.serie.map((x) => x[3]), borderColor: css("--lama"), borderWidth: 1.5, borderDash: [2, 3], pointRadius: 0, tension: 0.3, spanGaps: true },
+          ],
+        },
+        options: opcoesBase({ linhasCota: { linhas: linhasFaixas() } }),
+      });
+    }
+  }
+
   function renderPrevisao() {
     grafico48h();
     grafico7d();
     renderDias();
     renderFatores();
+    renderPlacar();
   }
 
   // ------------------------------------------------------------ histórico

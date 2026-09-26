@@ -248,6 +248,14 @@ main { max-width: 1240px; margin: 0 auto; padding: 24px 20px 40px; }
 .dia.hoje { background: var(--superficie-2); }
 .ic-sol { fill: #E3A008; } .ic-nuvem { fill: var(--tinta-fraca); } .ic-gota { fill: var(--agua); } .ic-raio { fill: var(--alerta); }
 
+/* placar */
+.placar-teste { margin: 0 0 16px; max-width: 80ch; }
+.placar-teste strong { font-weight: 600; }
+.placar-vazio { color: var(--tinta-suave); border-left: 3px solid var(--linha); padding: 4px 0 4px 12px; margin: 0 0 16px; max-width: 80ch; }
+.tabela td.melhor { color: var(--normal); font-weight: 600; }
+.tabela td.pior { color: var(--alerta); font-weight: 600; }
+#bloco-placar .grafico { margin-top: 16px; }
+
 /* fatores */
 .fatores { list-style: none; padding: 0; margin: 0; }
 .fatores li { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; padding: 12px 0; border-top: 1px solid var(--linha); }
