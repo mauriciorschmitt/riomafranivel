@@ -39,6 +39,13 @@ def agora_brasilia() -> dt.datetime:
     return dt.datetime.now(FUSO).replace(tzinfo=None, minute=0, second=0, microsecond=0)
 
 
+def limite_do_site(mensagem: str) -> dt.datetime | None:
+    """A COPEL só deixa consultar os últimos dias e diz o limite na mensagem de erro:
+    "A data inicial deve ser maior ou igual a 20/09/2026 17:00"."""
+    m = re.search(r"maior ou igual a (\d{2}/\d{2}/\d{4} \d{2}:\d{2})", mensagem or "")
+    return dt.datetime.strptime(m.group(1), "%d/%m/%Y %H:%M") if m else None
+
+
 def mensagem_do_site(texto: str) -> str:
     """Texto das mensagens que o site devolve junto com a tabela (erros de data etc.)."""
     blocos = re.findall(r'<update id="[^"]*(?:mensagem|messages)[^"]*"><!\[CDATA\[(.*?)\]\]>', texto, re.S)
@@ -259,10 +266,17 @@ class Cliente:
         while cursor > inicio and vazias < 3:
             comeco = max(inicio, cursor - dt.timedelta(days=janela_dias))
             bloco = self.leituras(estacao, comeco, cursor)
-            if not bloco and not todas:
+            if not bloco and not todas and not limite_do_site(self.ultima_mensagem):
                 # o bloco mais recente sempre deveria ter dados: é problema, não fim do histórico
                 detalhe = f" Mensagem do site: \"{self.ultima_mensagem}\"." if self.ultima_mensagem else " O site não mandou mensagem."
                 raise RuntimeError(f"COPEL: {estacao} veio sem leituras de {comeco:%d/%m %Hh} a {cursor:%d/%m %Hh}.{detalhe}")
+            limite = limite_do_site(self.ultima_mensagem) if not bloco else None
+            if limite:
+                # chegou ao limite da COPEL: pega o pedaço que ainda cabe e para
+                if comeco < limite < cursor:
+                    todas.update({l["hora"]: l for l in self.leituras(estacao, limite, cursor)})
+                print(f"  COPEL {estacao}: o site só guarda dados a partir de {limite:%d/%m/%Y %H:%M}")
+                break
             if not bloco:
                 motivo = f": \"{self.ultima_mensagem}\"" if self.ultima_mensagem else " (sem mensagem do site)"
                 print(f"  COPEL {estacao}: nada de {comeco:%d/%m/%Y} a {cursor:%d/%m/%Y}{motivo}")
@@ -301,5 +315,9 @@ if __name__ == "__main__":
         print(f"   {dias_atras:>3} dias atrás ({inicio:%d/%m/%Y} a {fim:%d/%m/%Y}): {len(bloco):>3} leituras ({faixa}){msg}")
         achou_antigo = achou_antigo or (dias_atras >= 30 and bool(bloco))
         time.sleep(1)
-    print("\nRESULTADO:", "a COPEL guarda histórico antigo: dá para baixar" if achou_antigo else
-          "a COPEL não entrega dados com mais de algumas semanas; Fragosos vai ser acumulado a cada coleta")
+    limite = limite_do_site(cliente.ultima_mensagem)
+    if achou_antigo:
+        print("\nRESULTADO: a COPEL guarda histórico antigo: dá para baixar")
+    else:
+        desde = f" (desde {limite:%d/%m/%Y %H:%M})" if limite else ""
+        print(f"\nRESULTADO: a COPEL só deixa consultar os últimos dias{desde}; o coletor acumula a cada coleta")
