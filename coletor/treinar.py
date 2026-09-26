@@ -72,6 +72,42 @@ def media_diaria(leituras, offset=0.0):
     return {d: statistics.fmean(v) for d, v in grupos.items() if len(v) >= 8}
 
 
+MIN_DIAS_ANO = 200  # ano com menos dias que isso não entra (a máxima pode ter caído num buraco)
+
+
+def completar_maximas_telemetria(config, leituras_cache, ultimo_ano, agora, ajuste) -> dict[int, float]:
+    """Completa as máximas anuais depois do fim da série consistida usando a telemetria.
+
+    A série consistida da ANA sai com anos de atraso. Para os anos seguintes, usa a
+    maior leitura horária da telemetria da mesma estação (já sem códigos de erro).
+    Só anos completos e com pelo menos 200 dias de leituras.
+    """
+    codigo = config["estacao"]["codigo"]
+    offset = float(config["estacao"].get("offset_m", 0.0))
+    por_ano: dict[int, list[dict]] = {}
+    for l in leituras_cache:
+        por_ano.setdefault(l["hora"].year, []).append(l)
+    resultado = {}
+    for ano in range(ultimo_ano + 1, agora.year):
+        leituras = por_ano.get(ano, [])
+        dias = {l["hora"].date() for l in leituras}
+        if len(dias) < MIN_DIAS_ANO:
+            try:
+                baixadas = ana.telemetria(codigo, dt.date(ano, 1, 1), dt.date(ano, 12, 31), ajuste)
+                leituras = base.limpar_leituras(baixadas)
+                dias = {l["hora"].date() for l in leituras}
+            except RuntimeError as erro:
+                print(f"  {ano}: telemetria indisponível ({erro})")
+                continue
+        if len(dias) < MIN_DIAS_ANO:
+            print(f"  {ano}: só {len(dias)} dias de telemetria, fica de fora")
+            continue
+        maior = max(leituras, key=lambda l: l["nivel_m"])
+        resultado[ano] = maior["nivel_m"] + offset
+        print(f"  {ano}: {resultado[ano]:.2f} m em {maior['hora']:%d/%m} (telemetria, {len(dias)} dias)")
+    return resultado
+
+
 def treinar_cidade(slug: str, baixar_historico: bool = False) -> dict:
     config = base.carregar_config(slug)
     agora = agora_local()
@@ -138,9 +174,14 @@ def treinar_cidade(slug: str, baixar_historico: bool = False) -> dict:
         print(f"  baixando série histórica da estação {codigo_hist}...")
         try:
             diario = ana.serie_historica_cotas(codigo_hist)
-            maximas = ana.maximas_anuais(diario)
             offset = float(config["estacao"].get("offset_convencional_m", 0.0))
-            base.salvar_maximas(slug, {a: v + offset for a, v in maximas.items()})
+            maximas = {a: v + offset for a, v in ana.maximas_anuais(diario).items()}
+            fontes = {a: "ANA convencional" for a in maximas}
+            print(f"  {len(maximas)} anos de máximas da série consistida ({min(maximas)}–{max(maximas)})")
+            extra = completar_maximas_telemetria(config, leituras, max(maximas), agora, ajuste)
+            for ano, cota in extra.items():
+                maximas[ano], fontes[ano] = cota, "ANA telemetria"
+            base.salvar_maximas(slug, maximas, fontes)
             print(f"  {len(maximas)} anos de máximas salvos ({min(maximas)}–{max(maximas)})")
         except (RuntimeError, ValueError) as erro:
             print(f"  aviso: série histórica indisponível ({erro})")
