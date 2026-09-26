@@ -279,3 +279,34 @@ def test_coleta_com_base_vazia_usa_72h_se_consulta_por_datas_falhar():
     buscar = gerar.buscador_copel(cliente, "Fragosos", dt.datetime(2026, 9, 26, 17))
     leituras = buscar(False)  # base vazia: tentaria 30 dias
     assert len(leituras) == 73
+
+
+class _SessaoComLimite(_SessaoFalsa):
+    """Como o site real: consultas antes do limite de 6 dias voltam com erro."""
+
+    LIMITE = dt.datetime(2026, 9, 20, 17)
+
+    def post(self, url, data=None, **kw):
+        campo = next((k for k in data if k.endswith("dataInicialPonto_input")), None)
+        if campo and dt.datetime.strptime(data[campo], "%d/%m/%Y %H") < self.LIMITE:
+            self.posts.append(data)
+            return _Resposta(
+                '<partial-response><changes><update id="j_idt164:9:formDialog:mensagem"><![CDATA[<span>'
+                "17:52:49 com.copel.pic.log.AppBusinessException: A data inicial deve ser maior ou igual a 20/09/2026 17:00."
+                "</span>]]></update></changes></partial-response>"
+            )
+        return super().post(url, data, **kw)
+
+
+def test_copel_historico_para_no_limite_do_site():
+    import time as _t
+    sessao = _SessaoComLimite()
+    cliente = copel.Cliente(sessao)
+    antes, _t.sleep = _t.sleep, (lambda s: None)
+    try:
+        cliente.historico("Fragosos", dt.datetime(2024, 9, 26), dt.datetime(2026, 9, 26, 16))
+    finally:
+        _t.sleep = antes
+    consultas = [p for p in sessao.posts if any(k.endswith("dataInicialPonto_input") for k in p)]
+    assert len(consultas) <= 4  # não fica insistindo por 2 anos de blocos recusados
+    assert copel.limite_do_site("A data inicial deve ser maior ou igual a 20/09/2026 17:00") == dt.datetime(2026, 9, 20, 17)
