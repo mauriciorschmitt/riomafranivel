@@ -310,3 +310,35 @@ def test_copel_historico_para_no_limite_do_site():
     consultas = [p for p in sessao.posts if any(k.endswith("dataInicialPonto_input") for k in p)]
     assert len(consultas) <= 4  # não fica insistindo por 2 anos de blocos recusados
     assert copel.limite_do_site("A data inicial deve ser maior ou igual a 20/09/2026 17:00") == dt.datetime(2026, 9, 20, 17)
+
+
+def test_placar_compara_previsao_com_o_observado():
+    from coletor.processar import placar
+    medias = {dt.date(2026, 9, d): n for d, n in [(20, 5.0), (21, 4.8), (22, 4.5), (23, 4.4)]}
+    previsoes = {
+        "2026-09-20": {"emitida": "2026-09-20T07:07", "nivel_atual": 5.0, "dias": [
+            {"data": "2026-09-21", "media": 4.7, "min": 4.6, "max": 4.9, "prob_inundacao": 0},
+            {"data": "2026-09-22", "media": 4.6, "min": 4.3, "max": 4.9, "prob_inundacao": 0},
+        ]},
+        "2026-09-21": {"emitida": "2026-09-21T07:07", "nivel_atual": 4.8, "dias": [
+            {"data": "2026-09-22", "media": 4.4, "min": 4.3, "max": 4.45, "prob_inundacao": 0},
+        ]},
+    }
+    r = placar(previsoes, medias, hoje=dt.date(2026, 9, 24))
+    um, dois = r["horizontes"][0], r["horizontes"][1]
+    assert um["n"] == 2 and abs(um["erro_medio"] - 0.1) < 1e-9       # |4.7-4.8| e |4.4-4.5|
+    assert abs(um["erro_palpite"] - 0.25) < 1e-9                       # |5.0-4.8| e |4.8-4.5|
+    assert um["na_faixa"] == 0.5                                       # 4.8 dentro; 4.5 fora de 4.3–4.45
+    assert dois["n"] == 1 and abs(dois["erro_medio"] - 0.1) < 1e-9
+    assert r["serie"][0][:3] == ["2026-09-21", 4.8, 4.7]
+
+
+def test_guarda_uma_previsao_por_dia_a_partir_das_7h(tmp_path, monkeypatch):
+    monkeypatch.setattr(base, "PASTA_DADOS", tmp_path)
+    saida = {"gerado_em": "2026-09-26T06:37", "demo": False, "atual": {"nivel": 5.0},
+             "previsao_dias": [{"data": "2026-09-26"}, {"data": "2026-09-27", "media": 4.3, "min": 4.1, "max": 4.5, "prob_inundacao": 0}]}
+    assert base.guardar_previsao("x", saida, dt.datetime(2026, 9, 26, 6, 37)) == {}   # antes das 7h: não guarda
+    arq = base.guardar_previsao("x", {**saida, "gerado_em": "2026-09-26T07:07"}, dt.datetime(2026, 9, 26, 7, 7))
+    assert arq["2026-09-26"]["emitida"] == "2026-09-26T07:07"
+    arq = base.guardar_previsao("x", {**saida, "gerado_em": "2026-09-26T07:37"}, dt.datetime(2026, 9, 26, 7, 37))
+    assert arq["2026-09-26"]["emitida"] == "2026-09-26T07:07"                          # só a primeira do dia
