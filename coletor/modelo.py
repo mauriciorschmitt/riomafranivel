@@ -37,8 +37,14 @@ NOMES = [
     "chuva_antecedente",
     "chuva_x_solo",
     "montante_variacao",
+    "chuva_3d",
+    "chuva_3d_quadrado",
+    "chuva_3d_x_solo",
+    "nivel_x_chuva_3d",
+    "nivel_quadrado",
 ]
 MIN_DIAS_TREINO = 120
+MIN_ANALOGOS = 30
 
 
 def _d(data) -> dt.date:
@@ -63,6 +69,7 @@ def _vetor(d, h, chuva, api, montante, atraso):
         if a in montante and b in montante:
             variacao_montante = montante[a] - montante[b]
     api_ontem = api.get(d - um, 0.0)
+    chuva_3d = p(d + um) + p(d) + p(d - um)
     return [
         h[d],
         h[d] - h[d - um],
@@ -73,6 +80,12 @@ def _vetor(d, h, chuva, api, montante, atraso):
         api_ontem,
         p(d + um) * api_ontem / 100.0,
         variacao_montante,
+        # termos não lineares: a resposta a chuva forte e com o rio alto não é proporcional
+        chuva_3d,
+        chuva_3d**2 / 100.0,
+        chuva_3d * api_ontem / 1000.0,
+        h[d] * chuva_3d / 10.0,
+        h[d] ** 2 / 10.0,
     ]
 
 
@@ -109,7 +122,7 @@ def _ajustar_ridge(X, y, alfa=1.0):
 def _prever_delta(modelo, x):
     if modelo["tipo"] == "heuristico":
         p = modelo["parametros"]
-        nivel, _, amanha, hoje, ontem, _, api, _, mont = x
+        nivel, _, amanha, hoje, ontem, _, api, _, mont = x[:9]
         saturacao = min(1.5, 0.6 + api / 100.0)
         return (
             -p["recessao"] * max(0.0, nivel - p["nivel_base"])
@@ -137,8 +150,17 @@ def simular(modelo, inicio: dt.date, niveis, chuva, montante=None, atraso=0, dia
     return previstos
 
 
-def erro_por_horizonte(modelo, niveis, chuva, montante, atraso, inicios):
-    erros = [[] for _ in range(HORIZONTE)]
+def chuva_acumulada(chuva, inicio, k):
+    """Chuva de `inicio` até o dia alvo (k+1 dias à frente), usada para achar situações parecidas."""
+    return sum(chuva.get(inicio + dt.timedelta(days=j), 0.0) for j in range(k + 2))
+
+
+def teste_retroativo(modelo, niveis, chuva, montante, atraso, inicios):
+    """Roda o modelo a partir de cada dia e devolve, por horizonte, pares (chuva acumulada, erro).
+
+    erro = previsto - observado (negativo quando o rio subiu mais que o previsto).
+    """
+    pares = [[] for _ in range(HORIZONTE)]
     for s in inicios:
         base = {d: v for d, v in niveis.items() if d <= s}
         if s - dt.timedelta(days=1) not in base:
@@ -147,8 +169,13 @@ def erro_por_horizonte(modelo, niveis, chuva, montante, atraso, inicios):
         for k, valor in enumerate(previstos):
             alvo = s + dt.timedelta(days=k + 1)
             if alvo in niveis:
-                erros[k].append(valor - niveis[alvo])
-    return [float(np.sqrt(np.mean(np.square(e)))) if e else None for e in erros]
+                pares[k].append((chuva_acumulada(chuva, s, k), valor - niveis[alvo]))
+    return pares
+
+
+def erro_por_horizonte(modelo, niveis, chuva, montante, atraso, inicios):
+    pares = teste_retroativo(modelo, niveis, chuva, montante, atraso, inicios)
+    return [float(np.sqrt(np.mean([e * e for _, e in p]))) if p else None for p in pares]
 
 
 def treinar(niveis, chuva, montante=None, atraso=0, config_modelo=None) -> dict:
@@ -163,10 +190,10 @@ def treinar(niveis, chuva, montante=None, atraso=0, config_modelo=None) -> dict:
 
     corte = int(len(y) * 0.8)
     parcial = {"tipo": "calibrado", **_ajustar_ridge(X[:corte], y[:corte]), "nivel_minimo": float(min(niveis.values()))}
-    validacao = datas[corte:-1]
-    rmse = erro_por_horizonte(parcial, niveis, chuva, montante, atraso, validacao)
-    if any(r is None for r in rmse):
-        rmse = erro_por_horizonte(parcial, niveis, chuva, montante, atraso, datas[:-1])
+    pares = teste_retroativo(parcial, niveis, chuva, montante, atraso, datas[corte:-1])
+    if any(len(p) < MIN_ANALOGOS for p in pares):
+        pares = teste_retroativo(parcial, niveis, chuva, montante, atraso, datas[:-1])
+    rmse = [float(np.sqrt(np.mean([e * e for _, e in p]))) if p else None for p in pares]
 
     final = _ajustar_ridge(X, y)
     rmse = _monotono([r if r is not None else 0.3 * (k + 1) for k, r in enumerate(rmse)])
@@ -176,6 +203,7 @@ def treinar(niveis, chuva, montante=None, atraso=0, config_modelo=None) -> dict:
         "variaveis": NOMES,
         "nivel_minimo": float(min(niveis.values())),
         "rmse_horizonte": [round(r, 3) for r in rmse],
+        "erros_validacao": [[[round(c, 1), round(e, 3)] for c, e in p] for p in pares],
         "n_dias": int(len(y)),
         "periodo": [datas[0].isoformat(), datas[-1].isoformat()],
         "treinado_em": dt.datetime.now().isoformat(timespec="minutes"),
@@ -189,6 +217,13 @@ def _monotono(valores):
         maior = max(maior, v)
         saida.append(maior)
     return saida
+
+
+def compativel(modelo: dict | None) -> bool:
+    """Um modelo salvo por uma versão anterior (outras variáveis) não pode ser usado."""
+    if not modelo:
+        return False
+    return modelo.get("tipo") == "heuristico" or modelo.get("variaveis") == NOMES
 
 
 def modelo_heuristico(config_modelo: dict, motivo: str = "modelo ainda não treinado") -> dict:
@@ -215,13 +250,25 @@ def _normal_acima(limite, media, desvio):
     return 0.5 * math.erfc((limite - media) / (desvio * math.sqrt(2)))
 
 
+def _faixa_empirica(pares, chuva_prevista):
+    """Quantis do erro nas situações de validação com chuva mais parecida com a prevista."""
+    ordenados = sorted(pares, key=lambda p: abs(math.log1p(p[0]) - math.log1p(chuva_prevista)))
+    erros = np.array([e for _, e in ordenados[: max(MIN_ANALOGOS, len(ordenados) * 2 // 5)]])
+    return erros
+
+
 def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, montante=None,
-           cota_inundacao=None, fator_incerteza=1.3, crescimento_diario=0.15):
+           cota_inundacao=None, fator_incerteza=1.3, crescimento_diario=0.15, fator_empirico=1.0):
     """Previsão dos próximos 7 dias a partir do nível atual.
 
-    O erro medido no teste retroativo usa a chuva observada. A chuva prevista
-    erra mais quanto mais distante o dia, então o desvio cresce
-    `crescimento_diario` (15 % por padrão) a cada dia à frente.
+    Faixa de 80% (do 10º ao 90º percentil):
+    * modelo calibrado: vem dos erros reais do teste retroativo, escolhendo as
+      situações com chuva acumulada mais parecida com a prevista. A faixa sai
+      assimétrica, como os erros reais (o modelo tende a subestimar subidas
+      depois de chuva forte, então a faixa se abre mais para cima).
+    * modelo heurístico: curva normal com desvio genérico, que cresce
+      `crescimento_diario` a cada dia à frente.
+    As larguras nunca diminuem com o horizonte.
     """
     niveis = {_d(k): v for k, v in niveis_diarios.items() if v is not None}
     niveis[hoje] = nivel_atual
@@ -231,18 +278,31 @@ def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, mon
     montante = {_d(k): v for k, v in (montante or {}).items() if v is not None}
     atraso = modelo.get("atraso_montante_dias", 0)
     medias = simular(modelo, hoje, niveis, chuva, montante, atraso)
-    saida = []
+    piso = modelo.get("nivel_minimo", 0.0)
+    validacao = modelo.get("erros_validacao") or []
+    empirico = len(validacao) == HORIZONTE and all(len(p) >= MIN_ANALOGOS for p in validacao)
+
+    saida, abaixo_max, acima_max = [], 0.0, 0.0
     for k, media in enumerate(medias):
-        desvio = modelo["rmse_horizonte"][k] * fator_incerteza * (1 + crescimento_diario * k)
-        item = {
-            "data": (hoje + dt.timedelta(days=k + 1)).isoformat(),
-            "media": round(media, 2),
-            "min": round(max(0.0, media - 1.28 * desvio), 2),  # faixa de 80%
-            "max": round(media + 1.28 * desvio, 2),
+        item = {"data": (hoje + dt.timedelta(days=k + 1)).isoformat(), "media": round(media, 2)}
+        if empirico:
+            erros = _faixa_empirica(validacao[k], chuva_acumulada(chuva, hoje, k)) * fator_empirico
+            abaixo = max(0.0, float(np.quantile(erros, 0.9)))   # observado = previsto - erro
+            acima = max(0.0, -float(np.quantile(erros, 0.1)))
+            prob = float(np.mean(media - erros >= cota_inundacao)) if cota_inundacao is not None else None
+            desvio = float(np.sqrt(np.mean(erros**2)))
+        else:
+            desvio = modelo["rmse_horizonte"][k] * fator_incerteza * (1 + crescimento_diario * k)
+            abaixo = acima = 1.28 * desvio
+            prob = _normal_acima(cota_inundacao, media, desvio) if cota_inundacao is not None else None
+        abaixo_max, acima_max = max(abaixo_max, abaixo), max(acima_max, acima)
+        item.update({
+            "min": round(max(piso, media - abaixo_max), 2),
+            "max": round(media + acima_max, 2),
             "desvio": round(desvio, 3),
-        }
-        if cota_inundacao is not None:
-            item["prob_inundacao"] = round(_normal_acima(cota_inundacao, media, desvio), 3)
+        })
+        if prob is not None:
+            item["prob_inundacao"] = round(prob, 3)
         saida.append(item)
     return saida
 
@@ -253,8 +313,9 @@ def projecao_horaria(agora: dt.datetime, nivel_atual: float, tendencia_m_h: floa
     Usa interpolação de Hermite: começa com a tendência observada nas últimas
     horas e chega ao valor previsto para amanhã (24 h) e depois de amanhã (48 h).
     """
-    pontos = [(0.0, nivel_atual, 0.0)] + [
-        (24.0 * (i + 1), d["media"], d["desvio"]) for i, d in enumerate(diaria[: max(2, horas // 24)])
+    pontos = [(0.0, nivel_atual, (0.0, 0.0))] + [
+        (24.0 * (i + 1), d["media"], (d["media"] - d["min"], d["max"] - d["media"]))
+        for i, d in enumerate(diaria[: max(2, horas // 24)])
     ]
     niveis = [p[1] for p in pontos]
     inclinacoes = [max(-0.2, min(0.2, tendencia_m_h))]
@@ -274,13 +335,17 @@ def projecao_horaria(agora: dt.datetime, nivel_atual: float, tendencia_m_h: floa
         h00, h10 = 2 * u**3 - 3 * u**2 + 1, u**3 - 2 * u**2 + u
         h01, h11 = -2 * u**3 + 3 * u**2, u**3 - u**2
         valor = h00 * h0 + h10 * largura * inclinacoes[i] + h01 * h1 + h11 * largura * inclinacoes[i + 1]
-        desvio = s0d + (s1d - s0d) * u if i > 0 else s1d * math.sqrt(u)
+        if i > 0:
+            abaixo = s0d[0] + (s1d[0] - s0d[0]) * u
+            acima = s0d[1] + (s1d[1] - s0d[1]) * u
+        else:
+            abaixo, acima = s1d[0] * math.sqrt(u), s1d[1] * math.sqrt(u)
         saida.append(
             {
                 "hora": (agora + dt.timedelta(hours=hora)).isoformat(timespec="minutes"),
                 "media": round(valor, 2),
-                "min": round(max(0.0, valor - 1.28 * desvio), 2),
-                "max": round(valor + 1.28 * desvio, 2),
+                "min": round(max(0.0, valor - abaixo), 2),
+                "max": round(valor + acima, 2),
             }
         )
     return saida
