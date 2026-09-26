@@ -37,11 +37,38 @@ def _float(v):
     return None if v in ("", None) else float(v)
 
 
+NIVEL_MAXIMO_VALIDO_M = 40.0  # acima disso é código de erro (a ANA usa 7777,777, 9999 etc.)
+DESVIO_PICO_M = 1.0  # leitura isolada que foge mais que isso das vizinhas é falha do sensor
+
+
+def limpar_leituras(leituras: list[dict]) -> list[dict]:
+    """Remove códigos de erro e picos isolados de falha do sensor.
+
+    1. Descarta níveis negativos ou acima de 40 m (códigos como 7777,777).
+    2. Descarta a leitura que foge mais de 1 m da mediana das 4 vizinhas
+       (2 antes e 2 depois). Uma subida real dura várias leituras e passa;
+       um pico de falha é uma leitura só e é removido.
+    Chuva e vazão da leitura removida também são descartadas.
+    """
+    validas = [l for l in leituras if l["nivel_m"] is not None and 0 <= l["nivel_m"] <= NIVEL_MAXIMO_VALIDO_M]
+    limpas = []
+    for i, l in enumerate(validas):
+        vizinhas = [v["nivel_m"] for v in validas[max(0, i - 2): i] + validas[i + 1: i + 3]]
+        if len(vizinhas) >= 2:
+            vizinhas.sort()
+            meio = len(vizinhas) // 2
+            mediana = vizinhas[meio] if len(vizinhas) % 2 else (vizinhas[meio - 1] + vizinhas[meio]) / 2
+            if abs(l["nivel_m"] - mediana) > DESVIO_PICO_M:
+                continue
+        limpas.append(l)
+    return limpas
+
+
 def ler_leituras(caminho: Path) -> list[dict]:
     if not caminho.exists():
         return []
     with open(caminho, encoding="utf-8") as f:
-        return [
+        return limpar_leituras([
             {
                 "hora": dt.datetime.fromisoformat(r["hora"]),
                 "nivel_m": _float(r["nivel_m"]),
@@ -49,14 +76,14 @@ def ler_leituras(caminho: Path) -> list[dict]:
                 "vazao_m3s": _float(r.get("vazao_m3s")),
             }
             for r in csv.DictReader(f)
-        ]
+        ])
 
 
 def mesclar_leituras(antigas: list[dict], novas: list[dict], agora: dt.datetime) -> list[dict]:
     todas = {l["hora"]: l for l in antigas}
     todas.update({l["hora"]: l for l in novas})
     limite = agora - dt.timedelta(days=DIAS_GUARDADOS)
-    return [todas[h] for h in sorted(todas) if limite <= h <= agora + dt.timedelta(hours=1)]
+    return limpar_leituras([todas[h] for h in sorted(todas) if limite <= h <= agora + dt.timedelta(hours=1)])
 
 
 def salvar_leituras(caminho: Path, leituras: list[dict]) -> None:
