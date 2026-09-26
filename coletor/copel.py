@@ -214,6 +214,7 @@ class Cliente:
             f"{e['janela']}_contentLoad": "true",
             e["form"]: e["form"],
         })
+        e["tabela_inicial"] = interpretar_tabela(resposta)  # a página abre mostrando as últimas 72 h
         e["campos"] = mapear_formulario(resposta, e["form"]) or mapear_formulario(self.pagina, e["form"])
         if not e["campos"]:
             raise RuntimeError(f"COPEL: não consegui abrir a estação \"{e['nome']}\" (a página pode ter mudado).")
@@ -222,7 +223,8 @@ class Cliente:
     def recentes(self, estacao: str) -> list[dict]:
         """Últimas ~72 horas. Falha com a mensagem do site se não vier nenhuma leitura."""
         e = self._estacao(estacao)
-        linhas = interpretar_tabela(self._carregar(e))
+        self._carregar(e)
+        linhas = e.get("tabela_inicial") or []
         if not linhas:
             agora = agora_brasilia()
             linhas = self.leituras(estacao, agora - dt.timedelta(hours=72), agora)
@@ -270,7 +272,7 @@ class Cliente:
 
 if __name__ == "__main__":
     # python -m coletor.copel             -> lista as estações
-    # python -m coletor.copel Fragosos    -> últimas leituras de uma estação
+    # python -m coletor.copel Fragosos    -> testa a estação: últimas 72 h e consulta por datas
     import sys
 
     cliente = Cliente()
@@ -278,6 +280,17 @@ if __name__ == "__main__":
         print("Estações da COPEL (bacia do Iguaçu):")
         for nome in cliente.disponiveis():
             print(" ", nome)
-    else:
-        for l in cliente.recentes(" ".join(sys.argv[1:]))[-12:]:
-            print(f"{l['hora']:%d/%m %Hh}  nível {l['nivel_m']} m  vazão {l['vazao_m3s']} m³/s  chuva {l['chuva_mm']} mm")
+        sys.exit(0)
+    nome = " ".join(sys.argv[1:])
+    recentes = cliente.recentes(nome)
+    print(f"\n1) Abrir a estação: {len(recentes)} leituras. Últimas:")
+    for l in recentes[-6:]:
+        print(f"   {l['hora']:%d/%m %Hh}  nível {l['nivel_m']} m  vazão {l['vazao_m3s']} m³/s  chuva {l['chuva_mm']} mm")
+    agora = agora_brasilia()
+    inicio, fim = agora - dt.timedelta(days=6), agora - dt.timedelta(days=3)
+    antigas = cliente.leituras(nome, inicio, fim)
+    print(f"\n2) Consulta por datas ({inicio:%d/%m %Hh} a {fim:%d/%m %Hh}): {len(antigas)} leituras"
+          + (f", de {antigas[0]['hora']:%d/%m %Hh} a {antigas[-1]['hora']:%d/%m %Hh}" if antigas else "")
+          + (f". Mensagem do site: \"{cliente.ultima_mensagem}\"" if cliente.ultima_mensagem else ""))
+    print("\nRESULTADO:", "tudo funcionando (dá para baixar o histórico)" if antigas else
+          "a coleta das últimas 72 h funciona, mas a consulta por datas não; mande este log")
