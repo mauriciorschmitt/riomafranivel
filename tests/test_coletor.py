@@ -261,3 +261,21 @@ def test_copel_nunca_pede_datas_no_futuro():
     cliente.leituras("Fragosos", futuro - dt.timedelta(days=2), futuro)
     pedido_fim = sessao.posts[-1]["j_idt164:9:formDialog:dataFinalPonto_input"]
     assert dt.datetime.strptime(pedido_fim, "%d/%m/%Y %H") <= copel.agora_brasilia()
+
+
+class _SessaoSoRecentes(_SessaoFalsa):
+    """Abrir a estação traz a tabela; a consulta por datas volta vazia."""
+
+    def post(self, url, data=None, **kw):
+        if any("dataInicialPonto_input" in k for k in data):
+            self.posts.append(data)
+            return _Resposta("<partial-response><changes></changes></partial-response>")
+        return super().post(url, data, **kw)
+
+
+def test_coleta_com_base_vazia_usa_72h_se_consulta_por_datas_falhar():
+    from coletor import gerar
+    cliente = copel.Cliente(_SessaoSoRecentes())
+    buscar = gerar.buscador_copel(cliente, "Fragosos", dt.datetime(2026, 9, 26, 17))
+    leituras = buscar(False)  # base vazia: tentaria 30 dias
+    assert len(leituras) == 73
