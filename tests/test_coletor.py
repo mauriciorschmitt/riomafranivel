@@ -342,3 +342,20 @@ def test_guarda_uma_previsao_por_dia_a_partir_das_7h(tmp_path, monkeypatch):
     assert arq["2026-09-26"]["emitida"] == "2026-09-26T07:07"
     arq = base.guardar_previsao("x", {**saida, "gerado_em": "2026-09-26T07:37"}, dt.datetime(2026, 9, 26, 7, 37))
     assert arq["2026-09-26"]["emitida"] == "2026-09-26T07:07"                          # só a primeira do dia
+
+
+def test_maximas_recentes_vem_da_telemetria(monkeypatch):
+    from coletor import treinar
+    t0 = dt.datetime(2023, 1, 1)
+    def telemetria_falsa(codigo, inicio, fim, ajuste=0.0):
+        if inicio.year == 2023:
+            leit = [{"hora": t0 + dt.timedelta(hours=6 * i), "nivel_m": 3.0, "chuva_mm": 0, "vazao_m3s": None} for i in range(4 * 300)]
+            for j in range(-40, 41):           # a cheia de outubro: sobe e desce ao longo de 20 dias
+                leit[500 + j]["nivel_m"] = round(10.93 - 7.93 * (abs(j) / 40) ** 1.5, 2)
+            leit[600]["nivel_m"] = 7777.777   # código de erro: não pode virar recorde
+            return leit
+        return []                             # 2024: sem dados
+    monkeypatch.setattr(treinar.ana, "telemetria", telemetria_falsa)
+    cfg = {"estacao": {"codigo": "65100001"}}
+    r = treinar.completar_maximas_telemetria(cfg, [], 2022, dt.datetime(2025, 3, 1), 0.0)
+    assert r == {2023: 10.93}
