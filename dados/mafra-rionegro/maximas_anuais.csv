@@ -1,87 +1,97 @@
-ano,cota_m
-1930,4.5
-1931,4.44
-1932,5.1
-1933,3.4
-1934,4.46
-1935,7.7
-1936,5.47
-1937,4.65
-1938,7.82
-1939,6.94
-1940,3.6
-1941,3.62
-1942,6.21
-1943,5.78
-1944,5.3
-1945,6.46
-1946,9.8
-1947,5.86
-1948,7.3
-1949,5.01
-1950,5.67
-1951,5.91
-1952,3.43
-1953,6.99
-1954,9.59
-1955,7.61
-1956,4.6
-1957,9.44
-1958,3.56
-1959,3.5
-1960,4.5
-1961,6.98
-1962,5.64
-1963,4.35
-1964,4.27
-1965,6.51
-1966,5.56
-1967,5.12
-1968,3.93
-1969,5.97
-1970,8.03
-1971,7.74
-1972,6.87
-1973,8.59
-1974,6.63
-1975,7.38
-1976,5.66
-1977,6.62
-1978,3.68
-1979,5.85
-1980,8.58
-1981,7.84
-1982,7.23
-1983,14.62
-1984,10.08
-1985,3.02
-1986,5.26
-1987,7.5
-1988,7.34
-1989,8.24
-1990,7.77
-1991,4.64
-1992,14.39
-1993,8.36
-1994,4.94
-1995,8.26
-1996,8.1
-1997,7.81
-1998,8.73
-1999,9.82
-2000,5.69
-2001,6.63
-2002,6.0
-2003,3.87
-2004,6.5
-2005,7.44
-2006,1.92
-2007,7.42
-2008,6.31
-2009,9.22
-2010,10.44
-2011,9.84
-2012,7.1
-2013,8.5
-2014,13.53
-2015,7.83
+ano,cota_m,fonte
+1930,4.5,ANA convencional
+1931,4.44,ANA convencional
+1932,5.1,ANA convencional
+1933,3.4,ANA convencional
+1934,4.46,ANA convencional
+1935,7.7,ANA convencional
+1936,5.47,ANA convencional
+1937,4.65,ANA convencional
+1938,7.82,ANA convencional
+1939,6.94,ANA convencional
+1940,3.6,ANA convencional
+1941,3.62,ANA convencional
+1942,6.21,ANA convencional
+1943,5.78,ANA convencional
+1944,5.3,ANA convencional
+1945,6.46,ANA convencional
+1946,9.8,ANA convencional
+1947,5.86,ANA convencional
+1948,7.3,ANA convencional
+1949,5.01,ANA convencional
+1950,5.67,ANA convencional
+1951,5.91,ANA convencional
+1952,3.43,ANA convencional
+1953,6.99,ANA convencional
+1954,9.59,ANA convencional
+1955,7.61,ANA convencional
+1956,4.6,ANA convencional
+1957,9.44,ANA convencional
+1958,3.56,ANA convencional
+1959,3.5,ANA convencional
+1960,4.5,ANA convencional
+1961,6.98,ANA convencional
+1962,5.64,ANA convencional
+1963,4.35,ANA convencional
+1964,4.27,ANA convencional
+1965,6.51,ANA convencional
+1966,5.56,ANA convencional
+1967,5.12,ANA convencional
+1968,3.93,ANA convencional
+1969,5.97,ANA convencional
+1970,8.03,ANA convencional
+1971,7.74,ANA convencional
+1972,6.87,ANA convencional
+1973,8.59,ANA convencional
+1974,6.63,ANA convencional
+1975,7.38,ANA convencional
+1976,5.66,ANA convencional
+1977,6.62,ANA convencional
+1978,3.68,ANA convencional
+1979,5.85,ANA convencional
+1980,8.58,ANA convencional
+1981,7.84,ANA convencional
+1982,7.23,ANA convencional
+1983,14.62,ANA convencional
+1984,10.08,ANA convencional
+1985,3.02,ANA convencional
+1986,5.26,ANA convencional
+1987,7.5,ANA convencional
+1988,7.34,ANA convencional
+1989,8.24,ANA convencional
+1990,7.77,ANA convencional
+1991,4.64,ANA convencional
+1992,14.39,ANA convencional
+1993,8.36,ANA convencional
+1994,4.94,ANA convencional
+1995,8.26,ANA convencional
+1996,8.1,ANA convencional
+1997,7.81,ANA convencional
+1998,8.73,ANA convencional
+1999,9.82,ANA convencional
+2000,5.69,ANA convencional
+2001,6.63,ANA convencional
+2002,6.0,ANA convencional
+2003,3.87,ANA convencional
+2004,6.5,ANA convencional
+2005,7.44,ANA convencional
+2006,1.92,ANA convencional
+2007,7.42,ANA convencional
+2008,6.31,ANA convencional
+2009,9.22,ANA convencional
+2010,10.44,ANA convencional
+2011,9.84,ANA convencional
+2012,7.1,ANA convencional
+2013,8.5,ANA convencional
+2014,13.53,ANA convencional
+2015,7.83,ANA convencional
+2016,5.89,ANA telemetria
+2017,5.297,ANA telemetria
+2018,5.724,ANA telemetria
+2019,5.432,ANA telemetria
+2020,3.36,ANA telemetria
+2021,7.112,ANA telemetria
+2022,6.578,ANA telemetria
+2023,10.538,ANA telemetria
+2024,6.992,ANA telemetria
+2025,4.578,ANA telemetria
