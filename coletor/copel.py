@@ -263,6 +263,9 @@ class Cliente:
                 # o bloco mais recente sempre deveria ter dados: é problema, não fim do histórico
                 detalhe = f" Mensagem do site: \"{self.ultima_mensagem}\"." if self.ultima_mensagem else " O site não mandou mensagem."
                 raise RuntimeError(f"COPEL: {estacao} veio sem leituras de {comeco:%d/%m %Hh} a {cursor:%d/%m %Hh}.{detalhe}")
+            if not bloco:
+                motivo = f": \"{self.ultima_mensagem}\"" if self.ultima_mensagem else " (sem mensagem do site)"
+                print(f"  COPEL {estacao}: nada de {comeco:%d/%m/%Y} a {cursor:%d/%m/%Y}{motivo}")
             vazias = vazias + 1 if not bloco else 0
             todas.update({l["hora"]: l for l in bloco})
             cursor = comeco
@@ -287,10 +290,16 @@ if __name__ == "__main__":
     for l in recentes[-6:]:
         print(f"   {l['hora']:%d/%m %Hh}  nível {l['nivel_m']} m  vazão {l['vazao_m3s']} m³/s  chuva {l['chuva_mm']} mm")
     agora = agora_brasilia()
-    inicio, fim = agora - dt.timedelta(days=6), agora - dt.timedelta(days=3)
-    antigas = cliente.leituras(nome, inicio, fim)
-    print(f"\n2) Consulta por datas ({inicio:%d/%m %Hh} a {fim:%d/%m %Hh}): {len(antigas)} leituras"
-          + (f", de {antigas[0]['hora']:%d/%m %Hh} a {antigas[-1]['hora']:%d/%m %Hh}" if antigas else "")
-          + (f". Mensagem do site: \"{cliente.ultima_mensagem}\"" if cliente.ultima_mensagem else ""))
-    print("\nRESULTADO:", "tudo funcionando (dá para baixar o histórico)" if antigas else
-          "a coleta das últimas 72 h funciona, mas a consulta por datas não; mande este log")
+    print("\n2) Consulta por datas, voltando no tempo (blocos de 3 dias):")
+    achou_antigo = False
+    for dias_atras in (3, 6, 9, 12, 30, 90, 180, 365, 730):
+        fim = agora - dt.timedelta(days=dias_atras)
+        inicio = fim - dt.timedelta(days=3)
+        bloco = cliente.leituras(nome, inicio, fim)
+        faixa = f"{bloco[0]['hora']:%d/%m/%Y %Hh} a {bloco[-1]['hora']:%d/%m/%Y %Hh}" if bloco else "nada"
+        msg = f' | site: "{cliente.ultima_mensagem}"' if cliente.ultima_mensagem else ""
+        print(f"   {dias_atras:>3} dias atrás ({inicio:%d/%m/%Y} a {fim:%d/%m/%Y}): {len(bloco):>3} leituras ({faixa}){msg}")
+        achou_antigo = achou_antigo or (dias_atras >= 30 and bool(bloco))
+        time.sleep(1)
+    print("\nRESULTADO:", "a COPEL guarda histórico antigo: dá para baixar" if achou_antigo else
+          "a COPEL não entrega dados com mais de algumas semanas; Fragosos vai ser acumulado a cada coleta")
