@@ -1,4 +1,5 @@
 import datetime as dt
+import re
 import json
 
 from coletor import ana, base, demo, estatistica, modelo as mod
@@ -227,3 +228,36 @@ def test_copel_estacao_inexistente_lista_as_disponiveis():
         assert "Fragosos" in str(erro)
     else:
         raise AssertionError("deveria falhar")
+
+
+class _SessaoSemDados(_SessaoFalsa):
+    """Servidor que abre a estação mas devolve a tabela vazia, com uma mensagem."""
+
+    def post(self, url, data=None, **kw):
+        self.posts.append(data)
+        if data["javax.faces.source"].endswith(":janela"):
+            texto = (DADOS_TESTE / "copel_fragosos.xml").read_text(encoding="utf-8")
+            return _Resposta(re.sub(r'<tr[^>]*data-ri="\d+".*?</tr>', "", texto, flags=re.S))
+        return _Resposta(
+            '<partial-response><changes><update id="j_idt164:9:formDialog:mensagem"><![CDATA['
+            '<div class="ui-messages-error">Período máximo de consulta: 3 dias</div>]]></update></changes></partial-response>'
+        )
+
+
+def test_copel_tabela_vazia_vira_erro_com_a_mensagem_do_site():
+    cliente = copel.Cliente(_SessaoSemDados())
+    try:
+        cliente.recentes("Fragosos")
+    except RuntimeError as erro:
+        assert "Período máximo de consulta: 3 dias" in str(erro)
+    else:
+        raise AssertionError("tabela vazia não pode passar em silêncio")
+
+
+def test_copel_nunca_pede_datas_no_futuro():
+    sessao = _SessaoFalsa()
+    cliente = copel.Cliente(sessao)
+    futuro = copel.agora_brasilia() + dt.timedelta(hours=6)
+    cliente.leituras("Fragosos", futuro - dt.timedelta(days=2), futuro)
+    pedido_fim = sessao.posts[-1]["j_idt164:9:formDialog:dataFinalPonto_input"]
+    assert dt.datetime.strptime(pedido_fim, "%d/%m/%Y %H") <= copel.agora_brasilia()
