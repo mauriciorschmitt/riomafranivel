@@ -685,7 +685,7 @@
       abrigos.forEach((a) => (porCidade[a.cidade || ""] ||= []).push(a));
       $("#abrigos").innerHTML = Object.entries(porCidade).map(([cid, lista]) => `
         <div>${cid ? `<h3>${esc(cid)}</h3>` : ""}<ul>${lista.map((a) => `<li><strong>${esc(a.nome)}</strong>
-          <span>${esc([a.endereco, a.capacidade ? `até ${a.capacidade} pessoas` : "", a.obs].filter(Boolean).join(". "))}</span></li>`).join("")}</ul></div>`).join("");
+          <span>${esc([a.endereco, a.capacidade ? `Capacidade para ${Number(a.capacidade).toLocaleString("pt-BR")} pessoas` : "", a.obs].filter(Boolean).join(". "))}</span></li>`).join("")}</ul></div>`).join("");
     }
   }
 
