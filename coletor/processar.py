@@ -9,7 +9,7 @@ import datetime as dt
 import statistics
 from collections import defaultdict
 
-from . import estatistica, modelo as mod
+from . import base, estatistica, modelo as mod
 
 
 # ---------------------------------------------------------------- utilidades
@@ -118,20 +118,25 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
             chuva_bacia[data] = dia["chuva_mm"]
 
     # montante (rio acima)
-    montante_cfg = next((m for m in config.get("montante", []) if m.get("codigo")), None)
+    montante_cfg = next((m for m in config.get("montante", []) if base.chave_montante(m)), None)
     montante_diario, montante_info = {}, None
-    if montante_cfg and bruto.get("montante", {}).get(montante_cfg["codigo"]):
-        lm = _aplicar_offset(bruto["montante"][montante_cfg["codigo"]], float(montante_cfg.get("offset_m", 0.0)))
+    chave = base.chave_montante(montante_cfg) if montante_cfg else None
+    if chave and bruto.get("montante", {}).get(chave):
+        lm = _aplicar_offset(bruto["montante"][chave], float(montante_cfg.get("offset_m", 0.0)))
         if lm:
             montante_diario = _diario(lm)
             ult = lm[-1]
             antes = [l for l in lm if l["hora"] <= ult["hora"] - dt.timedelta(hours=24)]
             variacao = ult["nivel"] - antes[-1]["nivel"] if antes else None
+            atraso_modelo = modelo.get("atraso_montante_dias") if modelo.get("usa_montante") else None
             montante_info = {
                 "nome": montante_cfg["nome"],
+                "fonte": "COPEL" if montante_cfg.get("estacao_copel") else "ANA",
                 "nivel": round(ult["nivel"], 2),
+                "hora": ult["hora"].isoformat(timespec="minutes"),
                 "variacao_24h": None if variacao is None else round(variacao, 2),
-                "atraso_horas": montante_cfg.get("atraso_horas"),
+                "atraso_horas": atraso_modelo * 24 if atraso_modelo is not None else montante_cfg.get("atraso_horas"),
+                "no_modelo": bool(modelo.get("usa_montante")),
             }
 
     # previsão de nível

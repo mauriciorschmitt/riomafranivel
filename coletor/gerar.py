@@ -12,7 +12,7 @@ import sys
 import traceback
 from zoneinfo import ZoneInfo
 
-from . import alertas, ana, base, modelo as mod, openmeteo
+from . import alertas, ana, base, copel, modelo as mod, openmeteo
 from .processar import processar
 
 FUSO = ZoneInfo("America/Sao_Paulo")
@@ -23,18 +23,27 @@ def agora_local() -> dt.datetime:
     return dt.datetime.now(FUSO).replace(tzinfo=None, second=0, microsecond=0)
 
 
-def atualizar_telemetria(slug: str, codigo: str, nome_arquivo: str, agora: dt.datetime, avisos: list, ajuste: float = 0.0) -> list[dict]:
+def atualizar_telemetria(slug: str, nome_arquivo: str, agora: dt.datetime, avisos: list, buscar, rotulo: str) -> list[dict]:
+    """Acrescenta as leituras novas à base local. `buscar(recente)` traz as leituras da fonte."""
     caminho = base.pasta(slug) / nome_arquivo
     antigas = base.ler_leituras(caminho)
-    dias = 3 if antigas and antigas[-1]["hora"] > agora - dt.timedelta(days=2) else 60
+    recente = bool(antigas) and antigas[-1]["hora"] > agora - dt.timedelta(days=2)
     try:
-        novas = ana.telemetria(codigo, agora.date() - dt.timedelta(days=dias), agora.date(), ajuste)
+        novas = buscar(recente)
     except RuntimeError as erro:
-        avisos.append(f"ANA {codigo}: {erro}. Usando dados guardados.")
+        avisos.append(f"{rotulo}: {erro}. Usando dados guardados.")
         novas = []
     todas = base.mesclar_leituras(antigas, novas, agora)
     base.salvar_leituras(caminho, todas)
     return todas
+
+
+def buscador_ana(codigo: str, agora: dt.datetime, ajuste: float):
+    return lambda recente: ana.telemetria(codigo, agora.date() - dt.timedelta(days=3 if recente else 60), agora.date(), ajuste)
+
+
+def buscador_copel(cliente: copel.Cliente, estacao: str, agora: dt.datetime):
+    return lambda recente: cliente.recentes(estacao) if recente else cliente.historico(estacao, agora - dt.timedelta(days=60), agora)
 
 
 def atualizar_chuva(slug: str, previsao: dict, hoje: dt.date) -> dict[str, float]:
@@ -55,11 +64,30 @@ def gerar_cidade(slug: str) -> dict:
     avisos: list[str] = []
 
     ajuste = float(config["estacao"].get("ajuste_fuso_horas", 0.0))
-    telemetria = atualizar_telemetria(slug, config["estacao"]["codigo"], "telemetria.csv", agora, avisos, ajuste)
+    cliente_copel = copel.Cliente()  # só acessa a COPEL se alguma estação usar
+    est = config["estacao"]
+    telemetria = atualizar_telemetria(
+        slug, "telemetria.csv", agora, avisos, buscador_ana(est["codigo"], agora, ajuste), f"ANA {est['codigo']}"
+    )
+    # reserva: a mesma régua na COPEL, se a ANA estiver atrasada
+    if est.get("copel") and (not telemetria or telemetria[-1]["hora"] < agora - dt.timedelta(minutes=90)):
+        antes = telemetria[-1]["hora"] if telemetria else None
+        telemetria = atualizar_telemetria(
+            slug, "telemetria.csv", agora, avisos, buscador_copel(cliente_copel, est["copel"], agora), f"COPEL {est['copel']}"
+        )
+        if telemetria and telemetria[-1]["hora"] != antes:
+            avisos.append(f"ANA atrasada; última leitura veio da COPEL ({est['copel']}).")
+
     montante = {}
     for m in config.get("montante", []):
-        if m.get("codigo"):
-            montante[m["codigo"]] = atualizar_telemetria(slug, m["codigo"], f"montante_{m['codigo']}.csv", agora, avisos, ajuste)
+        chave = base.chave_montante(m)
+        if not chave:
+            continue
+        if m.get("estacao_copel"):
+            buscar, rotulo = buscador_copel(cliente_copel, m["estacao_copel"], agora), f"COPEL {m['estacao_copel']}"
+        else:
+            buscar, rotulo = buscador_ana(m["codigo"], agora, ajuste), f"ANA {m['codigo']}"
+        montante[chave] = atualizar_telemetria(slug, f"montante_{chave}.csv", agora, avisos, buscar, rotulo)
 
     try:
         previsao = openmeteo.previsao_bacia(config["bacia"]["pontos"])
@@ -107,7 +135,10 @@ def main(argv=None) -> int:
         try:
             saida = gerar_cidade(slug)
             a = saida["atual"]
-            print(f"[ok] {slug}: {a['nivel']:.2f} m ({a['status']['nome']}), modelo {saida['modelo']['tipo']}")
+            print(f"[ok] {slug}: {a['nivel']:.2f} m às {a['hora'][11:16]} ({a['status']['nome']}), modelo {saida['modelo']['tipo']}")
+            mont = saida["fatores"].get("montante")
+            if mont:
+                print(f"     rio acima: {mont['nome']} {mont['nivel']:.2f} m às {mont['hora'][11:16]}")
             for aviso in saida["avisos"]:
                 print(f"     aviso: {aviso}")
         except Exception:  # uma cidade com problema não derruba as outras

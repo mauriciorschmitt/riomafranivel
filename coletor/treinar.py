@@ -17,21 +17,26 @@ import statistics
 import sys
 from collections import defaultdict
 
-from . import ana, base, modelo as mod, openmeteo
+from . import ana, base, copel, modelo as mod, openmeteo
 from .gerar import agora_local
 
 
-def completar_telemetria(slug, codigo, arquivo, dias, agora, ajuste=0.0):
+MIN_DIAS_MONTANTE = 90
+
+
+def completar_telemetria(slug, arquivo, dias, agora, buscar_periodo, rotulo):
+    """Completa a base local para trás até `dias` atrás. `buscar_periodo(inicio, fim)` traz as leituras."""
     caminho = base.pasta(slug) / arquivo
     leituras = base.ler_leituras(caminho)
-    inicio_desejado = agora.date() - dt.timedelta(days=dias)
-    primeira = leituras[0]["hora"].date() if leituras else agora.date()
+    inicio_desejado = agora - dt.timedelta(days=dias)
+    primeira = leituras[0]["hora"] if leituras else agora
     if primeira > inicio_desejado + dt.timedelta(days=7):
-        print(f"  baixando telemetria {codigo} de {inicio_desejado} a {primeira}...")
+        print(f"  baixando {rotulo} de {inicio_desejado:%d/%m/%Y} a {primeira:%d/%m/%Y}...")
         try:
-            antigas = ana.telemetria(codigo, inicio_desejado, primeira, ajuste)
+            antigas = buscar_periodo(inicio_desejado, primeira)
             leituras = base.mesclar_leituras(antigas, leituras, agora)
             base.salvar_leituras(caminho, leituras)
+            print(f"  {len(antigas)} leituras recebidas")
         except RuntimeError as erro:
             print(f"  aviso: {erro}")
     return leituras
@@ -75,18 +80,52 @@ def treinar_cidade(slug: str, baixar_historico: bool = False) -> dict:
     print(f"[{slug}]")
 
     ajuste = float(config["estacao"].get("ajuste_fuso_horas", 0.0))
-    leituras = completar_telemetria(slug, config["estacao"]["codigo"], "telemetria.csv", dias, agora, ajuste)
+    codigo = config["estacao"]["codigo"]
+    leituras = completar_telemetria(
+        slug, "telemetria.csv", dias, agora,
+        lambda i, f: ana.telemetria(codigo, i.date(), f.date(), ajuste), f"telemetria ANA {codigo}",
+    )
     chuva = completar_chuva(slug, config["bacia"]["pontos"], dias, agora.date())
-
-    montante, atraso = None, 0
-    cfg_m = next((m for m in config.get("montante", []) if m.get("codigo")), None)
-    if cfg_m:
-        lm = completar_telemetria(slug, cfg_m["codigo"], f"montante_{cfg_m['codigo']}.csv", dias, agora, ajuste)
-        montante = media_diaria(lm, float(cfg_m.get("offset_m", 0.0)))
-        atraso = round(float(cfg_m.get("atraso_horas", 0)) / 24)
-
     niveis = media_diaria(leituras, float(config["estacao"].get("offset_m", 0.0)))
-    modelo = mod.treinar(niveis, chuva, montante, atraso, cfg_prev)
+
+    montante = None
+    cfg_m = next((m for m in config.get("montante", []) if base.chave_montante(m)), None)
+    if cfg_m:
+        chave = base.chave_montante(cfg_m)
+        if cfg_m.get("estacao_copel"):
+            cliente = copel.Cliente()
+            buscar = lambda i, f: cliente.historico(cfg_m["estacao_copel"], i, f)  # noqa: E731
+        else:
+            buscar = lambda i, f: ana.telemetria(cfg_m["codigo"], i.date(), f.date(), ajuste)  # noqa: E731
+        lm = completar_telemetria(slug, f"montante_{chave}.csv", dias, agora, buscar, f"{cfg_m['nome']} (rio acima)")
+        montante = media_diaria(lm, float(cfg_m.get("offset_m", 0.0)))
+        comuns = len(set(montante) & set(niveis))
+        if comuns < MIN_DIAS_MONTANTE:
+            print(f"  {cfg_m['nome']}: só {comuns} dias junto com a estação principal; "
+                  f"entra no modelo quando tiver {MIN_DIAS_MONTANTE} (a base cresce a cada coleta)")
+            montante = None
+
+    if montante:
+        # testa quantos dias a cheia leva para chegar e fica com o que erra menos em 1 a 3 dias
+        candidatos = {}
+        for atraso in range(0, 4):
+            m = mod.treinar(niveis, chuva, montante, atraso, cfg_prev)
+            if m["tipo"] == "calibrado":
+                candidatos[atraso] = m
+                print(f"  rio acima com {atraso} dia(s) de atraso: erro 1-3 dias = "
+                      f"{sum(m['rmse_horizonte'][:3]) / 3:.2f} m")
+        sem = mod.treinar(niveis, chuva, None, 0, cfg_prev)
+        melhor = min(candidatos, key=lambda a: sum(candidatos[a]["rmse_horizonte"][:3])) if candidatos else None
+        if melhor is not None and sum(candidatos[melhor]["rmse_horizonte"][:3]) < sum(sem["rmse_horizonte"][:3]):
+            modelo = {**candidatos[melhor], "usa_montante": True}
+            print(f"  usando {cfg_m['nome']} com {melhor} dia(s) de atraso "
+                  f"(sem ela: {sum(sem['rmse_horizonte'][:3]) / 3:.2f} m)")
+        else:
+            modelo = sem
+            print(f"  {cfg_m['nome']} não melhorou a previsão; modelo segue só com chuva")
+    else:
+        modelo = mod.treinar(niveis, chuva, None, 0, cfg_prev)
+
     base.salvar_json(base.pasta(slug) / "modelo.json", modelo)
     if modelo["tipo"] == "calibrado":
         erros = ", ".join(f"{r:.2f}" for r in modelo["rmse_horizonte"])
