@@ -1,6 +1,6 @@
-# Monitor de Cheias SC
+# Régua Viva: monitor de cheias para cidades de SC
 
-Painel público e gratuito de nível de rio, com previsão de 7 dias, régua de impactos da cidade, análise histórica de cheias e contatos de emergência. Funciona com dados públicos (ANA e Open-Meteo), roda de graça no GitHub e serve para qualquer cidade que tenha uma estação telemétrica da ANA.
+Site público e gratuito que responde à pergunta de quem mora perto do rio: *a água vai chegar na minha rua? quando?* Mostra o nível agora em forma de boletim, a régua da cidade em escala, o que deve acontecer nos próximos dias contado em impactos (pontes, ruas, bairros), a água que vem de rio acima, o histórico de cheias e o que fazer se a água subir, com plano da família para imprimir e boletim em imagem para mandar no WhatsApp. Funciona com dados públicos (ANA e Open-Meteo), roda de graça no GitHub e serve para qualquer cidade que tenha uma estação telemétrica da ANA.
 
 Custo: zero. Não precisa de servidor, banco de dados, chave de API nem sensor próprio.
 
@@ -88,7 +88,10 @@ Cada arquivo em `config/cidades/` vira uma cidade no mesmo site, com um seletor 
 | `montante` | Estação rio acima: `codigo` (ANA) ou `estacao_copel` (nome no site da COPEL). O treino mede sozinho quantos dias a cheia leva para chegar e só usa a estação se ela melhorar a previsão |
 | `bacia.pontos` | Pontos onde a chuva é consultada. O primeiro é a cidade; espalhe os demais pela bacia, principalmente rio acima |
 | `cotas.faixas` | Cotas de atenção, alerta, emergência etc. Use as cotas oficiais do município |
+| `nome_app` | Nome do site (padrão: Régua Viva) |
 | `regua` | O que acontece na cidade em cada nível (ruas, pontes, bairros). É a parte mais útil para o morador: vale construir com a Defesa Civil |
+| `locais` | Ruas, bairros e pontes que o morador escolhe em "Onde eu moro", com a cota em que cada um começa a ser atingido. Sem essa lista, o site usa os marcos da régua |
+| `orientacoes_url` | Página oficial de orientações da Defesa Civil estadual, mostrada junto do plano da família |
 | `pontes` | Altura em que cada ponte é coberta. O painel calcula sozinho quais pontes cada cheia histórica cobriu |
 | `cheias_historicas` | Grandes cheias com data, cota e descrição |
 | `maximas_anuais_extra` | Anos que faltam na série da ANA (por exemplo, cheias anteriores à estação) |
