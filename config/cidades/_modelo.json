@@ -1,7 +1,7 @@
 {
   "_leia": "Copie este arquivo para config/cidades/<nome-da-cidade>.json e preencha. Campos com _ no início são só comentários. Arquivos que começam com _ são ignorados.",
   "slug": "nome-da-cidade",
-  "nome_app": "Alerta Rio X",
+  "nome_app": "Régua Viva",
   "local": "Cidade (SC)",
   "rio": "Rio X",
   "url_site": "",
@@ -13,15 +13,17 @@
     "lat": -27.0,
     "lon": -49.0,
     "offset_m": 0.0,
-    "_nota": "Código da estação telemétrica da ANA (python ferramentas/buscar_estacoes.py <cidade>)."
+    "_nota": "Código da estação telemétrica da ANA (python ferramentas/buscar_estacoes.py <cidade>).",
+    "copel": ""
   },
   "montante": [
     {
       "codigo": "",
+      "estacao_copel": "",
       "nome": "",
       "atraso_horas": 24,
       "offset_m": 0.0,
-      "_nota": "Opcional: estação rio acima."
+      "_nota": "Opcional: estação rio acima. Preencha \"codigo\" (ANA) ou \"estacao_copel\" (nome no site da COPEL, bacia do Iguaçu)."
     }
   ],
   "bacia": {
@@ -120,5 +122,15 @@
         "obs": ""
       }
     ]
-  }
+  },
+  "orientacoes_url": "",
+  "locais": [
+    {
+      "_nota": "Opcional. Ruas, bairros e pontes para o \"Onde eu moro\", com a cota em que começam a ser atingidos. Sem isso, o site usa os marcos da régua."
+    },
+    {
+      "nome": "Rua ...",
+      "cota": 7.0
+    }
+  ]
 }

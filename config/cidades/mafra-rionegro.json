@@ -1,6 +1,6 @@
 {
   "slug": "mafra-rionegro",
-  "nome_app": "Alerta Rio Negro",
+  "nome_app": "Régua Viva",
   "local": "Rio Negro (PR) e Mafra (SC)",
   "rio": "Rio Negro",
   "url_site": "https://mauriciorschmitt.github.io/riomafranivel/",
@@ -125,6 +125,51 @@
       "cota": 14.57,
       "titulo": "Nível da cheia de julho de 1983",
       "texto": "Maior cheia registrada. Planície urbana submersa."
+    }
+  ],
+  "locais": [
+    {
+      "_nota": "Lugares que o morador pode escolher em \"Onde eu moro\". Cota = nível em que o lugar começa a ser atingido. Tirados da régua: confirme com a Defesa Civil."
+    },
+    {
+      "nome": "Parques e praças da orla",
+      "cota": 5.0
+    },
+    {
+      "nome": "Ponte do Passa Três",
+      "cota": 6.5
+    },
+    {
+      "nome": "Rua São João",
+      "cota": 7.0
+    },
+    {
+      "nome": "Vila Argentina",
+      "cota": 7.0
+    },
+    {
+      "nome": "Volta Grande",
+      "cota": 7.0
+    },
+    {
+      "nome": "Ponte Metálica",
+      "cota": 8.5
+    },
+    {
+      "nome": "Bairro Bom Jesus",
+      "cota": 9.0
+    },
+    {
+      "nome": "Bairro Passa Três",
+      "cota": 9.0
+    },
+    {
+      "nome": "Av. Prefeito Frederico Heyse",
+      "cota": 9.0
+    },
+    {
+      "nome": "Centro de Mafra e Praça João Pessoa",
+      "cota": 10.93
     }
   ],
   "pontes": [
@@ -270,5 +315,6 @@
         "obs": ""
       }
     ]
-  }
+  },
+  "orientacoes_url": "https://www.defesacivil.sc.gov.br/"
 }
