@@ -569,6 +569,12 @@
     return { risco, texto };
   }
 
+  const palavraChuva = (mm, p) => {
+    if ((mm ?? 0) < 0.5 && (p == null || p < 15)) return "sem chuva";
+    if (p == null) return "";
+    return p >= 70 ? "quase certa" : p >= 40 ? "chuva provável" : p >= 15 ? "pode chover" : "improvável";
+  };
+
   function renderImpactos() {
     const dias = D.previsao_dias;
     const marcos = [...(D.config.regua || [])].filter((m) => m.cota != null).sort((a, b) => a.cota - b.cota);
@@ -577,28 +583,53 @@
     let lo = Math.max(0, Math.floor(Math.min(...valores) - 0.5));
     let hi = Math.ceil(Math.max(...valores) + 0.5);
     const proxima = faixas().find((f) => f.cota > Math.max(...valores));
-    if (proxima) hi = Math.max(hi, Math.ceil(proxima.cota + 0.3));
-    const x = (v) => `${(((v - lo) / (hi - lo)) * 100).toFixed(2)}%`;
+    // mostra a próxima faixa acima só se ela estiver perto; senão a escala fica espremida
+    if (proxima && proxima.cota - Math.max(...valores) <= 2) hi = Math.max(hi, Math.ceil(proxima.cota + 0.6));
+    const pos = (v) => ((Math.min(Math.max(v, lo), hi) - lo) / (hi - lo)) * 100;
+    const x = (v) => `${pos(v).toFixed(2)}%`;
+
+    // zonas de alerta como fundo colorido da barra (em vez de linhas soltas)
+    const fs = faixas();
+    const zonas = [{ id: "normal", nome: "Normal", de: lo, ate: fs[0]?.cota ?? hi }]
+      .concat(fs.map((f, i) => ({ id: f.id, nome: f.nome, de: f.cota, ate: fs[i + 1]?.cota ?? hi })))
+      .filter((z) => z.ate > lo && z.de < hi);
+    const tinta = (id) => (id === "normal" ? "transparent" : `color-mix(in srgb, var(--${id}) 30%, transparent)`);
+    const fundo = `linear-gradient(to right, ${zonas.map((z) => `${tinta(z.id)} ${x(z.de)} ${x(z.ate)}`).join(", ")})`;
+    const nomesZonas = zonas
+      .map((z) => `<span class="zona-nome" data-status="${z.id}" title="${esc(z.nome)}: de ${fmt(Math.max(z.de, lo), 1)} a ${fmt(Math.min(z.ate, hi), 1)} m" style="left:${x(z.de)};width:calc(${x(z.ate)} - ${x(z.de)})">${esc(z.nome)}</span>`).join("");
     const passo = hi - lo > (window.innerWidth < 560 ? 5 : 8) ? 2 : 1;
-    const escala = [];
-    for (let m = Math.ceil(lo); m <= hi; m += passo) escala.push(`<span style="left:${x(m)}">${m} m</span>`);
-    const linhasFx = faixas().filter((f) => f.cota > lo && f.cota < hi)
-      .map((f) => `<span class="marca-cota" style="left:${x(f.cota)};background:${corStatus(f.id)}" title="${esc(f.nome)}: ${fmt(f.cota)} m"></span>`).join("");
-    const cabeca = `<li class="impacto" aria-hidden="true"><span></span><span></span><div class="impactos-escala">${escala.join("")}</div><span></span></li>`;
+    const metros = [];
+    for (let m = Math.ceil(lo); m <= hi; m += passo) {
+      const ajuste = pos(m) > 95 ? "transform:translateX(-100%)" : pos(m) < 5 ? "transform:none" : "";
+      metros.push(`<span style="left:${x(m)};${ajuste}">${m} m</span>`);
+    }
+
+    const cabeca = `<li class="impacto impacto-cabeca">
+      <span>Dia</span><span>Chuva</span>
+      <div class="impactos-escala"><div class="zonas-nomes">${nomesZonas}</div><div class="metros">${metros.join("")}</div></div>
+      <span class="so-largo">O que significa</span>
+    </li>`;
+
     $("#impactos").innerHTML = cabeca + dias.map((d, i) => {
       const dt = dataLocal(d.data);
       const nome = i === 0 ? "Hoje" : i === 1 ? "Amanhã" : SEMANA_CURTA[dt.getDay()];
       const { risco, texto } = impactoDoDia(d, i, marcos);
       const icone = iconeTempo(d.codigo).split("</svg>")[0] + "</svg>";
       const faixa = i === 0 || d.min == null ? "" : `<span class="faixa-prov" style="left:${x(d.min)};width:calc(${x(d.max)} - ${x(d.min)})"></span>`;
-      const rotulo = i === 0 ? `Agora: ${fmt(n)} metros` : `Previsto: ${fmt(d.media)} metros, entre ${fmt(d.min)} e ${fmt(d.max)}`;
+      const rotulo = i === 0 ? `Agora: ${fmt(n)} metros` : `Mais provável ${fmt(d.media)} metros; pode ficar entre ${fmt(d.min)} e ${fmt(d.max)}`;
+      const entre = i === 0 || d.min == null ? "" : `<small class="entre">entre ${fmt(d.min, 1)} e ${fmt(d.max, 1)} m</small>`;
       return `<li class="impacto${i === 0 ? " hoje" : ""}" data-risco="${risco}">
         <div class="impacto-dia">${nome}<small>${dataCurta(d.data)}</small></div>
-        <div class="impacto-chuva">${icone}<span>${d.chuva_mm != null ? `${fmt(d.chuva_mm, 0)} mm` : "–"}${d.prob != null ? `<small>${d.prob}% chance</small>` : ""}</span></div>
-        <div class="alcance" role="img" aria-label="${rotulo}">${linhasFx}<span class="agora" style="left:${x(n)}"></span>${faixa}<span class="media" style="left:${x(i === 0 ? n : d.media)}"></span></div>
-        <p class="impacto-texto">${texto}</p>
+        <div class="impacto-chuva">${icone}<span>${d.chuva_mm != null ? `${fmt(d.chuva_mm, 0)} mm` : "–"}<small>${palavraChuva(d.chuva_mm, d.prob)}</small></span></div>
+        <div class="alcance" role="img" aria-label="${rotulo}" style="background:${fundo}">${faixa}<span class="media" style="left:${x(i === 0 ? n : d.media)}"></span></div>
+        <p class="impacto-texto">${texto}${entre}</p>
       </li>`;
     }).join("");
+    // nome da zona que não cabe na largura dela fica só na dica (title), sem texto cortado
+    $$("#impactos .zona-nome").forEach((el) => {
+      if (el.scrollWidth > el.clientWidth + 1) el.classList.add("apertado");
+      if (el.scrollWidth > el.clientWidth + 1) el.classList.add("sem-texto");
+    });
   }
 
   function renderPorque() {
