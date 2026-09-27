@@ -359,3 +359,15 @@ def test_maximas_recentes_vem_da_telemetria(monkeypatch):
     cfg = {"estacao": {"codigo": "65100001"}}
     r = treinar.completar_maximas_telemetria(cfg, [], 2022, dt.datetime(2025, 3, 1), 0.0)
     assert r == {2023: 10.93}
+
+
+def test_chance_por_marco_da_regua():
+    cfg, agora, bruto, maximas, treino = _dados_demo()
+    modelo = mod.treinar(treino["niveis"], treino["chuva"])
+    saida = processar(cfg, bruto, modelo, maximas)
+    dia = saida["previsao_dias"][3]
+    probs = dia["prob_cotas"]
+    assert "7.00" in probs and "14.57" in probs
+    cotas = sorted(probs, key=float)
+    assert all(probs[a] >= probs[b] for a, b in zip(cotas, cotas[1:]))  # quanto mais alto, menos provável
+    assert abs(probs["7.00"] - dia["prob_inundacao"]) < 1e-9
