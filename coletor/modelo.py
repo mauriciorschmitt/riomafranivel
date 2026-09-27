@@ -274,7 +274,8 @@ def _faixa_empirica(pares, chuva_prevista):
 
 
 def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, montante=None,
-           cota_inundacao=None, fator_incerteza=1.3, crescimento_diario=0.15, fator_empirico=1.0):
+           cota_inundacao=None, fator_incerteza=1.3, crescimento_diario=0.15, fator_empirico=1.0,
+           cotas_extras=None):
     """Previsão dos próximos 7 dias a partir do nível atual.
 
     Faixa de 80% (do 10º ao 90º percentil):
@@ -307,10 +308,12 @@ def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, mon
             acima = max(0.0, -float(np.quantile(erros, 0.1)))
             prob = float(np.mean(media - erros >= cota_inundacao)) if cota_inundacao is not None else None
             desvio = float(np.sqrt(np.mean(erros**2)))
+            chance = lambda c: float(np.mean(media - erros >= c))  # noqa: E731
         else:
             desvio = modelo["rmse_horizonte"][k] * fator_incerteza * (1 + crescimento_diario * k)
             abaixo = acima = 1.28 * desvio
             prob = _normal_acima(cota_inundacao, media, desvio) if cota_inundacao is not None else None
+            chance = lambda c, m=media, d=desvio: _normal_acima(c, m, d)  # noqa: E731
         abaixo_max, acima_max = max(abaixo_max, abaixo), max(acima_max, acima)
         item.update({
             "min": round(max(piso, media - abaixo_max), 2),
@@ -319,6 +322,9 @@ def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, mon
         })
         if prob is not None:
             item["prob_inundacao"] = round(prob, 3)
+        if cotas_extras:
+            # chance de passar de cada marco da régua / local cadastrado, para a linha do tempo
+            item["prob_cotas"] = {f"{c:.2f}": round(chance(c), 3) for c in cotas_extras}
         saida.append(item)
     return saida
 

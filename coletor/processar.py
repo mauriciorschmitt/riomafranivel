@@ -187,6 +187,11 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
         cota_inundacao=cota_inundacao, fator_incerteza=float(cfg_prev.get("fator_incerteza", 1.3)),
         crescimento_diario=float(cfg_prev.get("crescimento_incerteza_dia", 0.15)),
         fator_empirico=float(cfg_prev.get("fator_incerteza_empirico", 1.0)),
+        cotas_extras=sorted(
+            {float(x["cota"]) for x in config.get("regua", []) if "cota" in x}
+            | {float(x["cota"]) for x in config.get("locais", []) if "cota" in x}
+            | {float(f["cota"]) for f in config["cotas"]["faixas"]}
+        ),
     )
     horaria = mod.projecao_horaria(ultima["hora"], ultima["nivel"], tendencia or 0.0, diaria, horas=48)
 
