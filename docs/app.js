@@ -19,7 +19,6 @@
 
   let D = null;
   const graficos = {};
-  const renderizadas = new Set();
 
   // ------------------------------------------------------------ dados
   async function carregar() {
@@ -60,19 +59,34 @@
   const inundacao = () => D.config.cotas.inundacao;
 
   // ------------------------------------------------------------ topo
+  const horaCurta = (s) => { const [h, m] = hora(s).split(":"); return m === "00" ? `${Number(h)}h` : `${Number(h)}h${m}`; };
+  const minutosDesde = (s) => Math.max(0, Math.round((Date.now() - dataLocal(s).getTime()) / 60000));
+
   function renderTopo() {
     const c = D.config;
-    document.title = `${c.nome_app}: nível do ${c.rio}`;
+    document.title = `${c.nome_app}: ${c.rio} em ${c.local}`;
     $("#nome-app").textContent = c.nome_app;
-    $("#local").textContent = `${c.rio}, em ${c.local}`;
+    $("#local").textContent = `${c.rio}, ${c.local}`;
     $("#demo-aviso").hidden = !D.demo;
-    const minutos = Math.max(0, Math.round((Date.now() - dataLocal(D.atual.hora).getTime()) / 60000));
-    const idade = minutos < 60 ? `há ${minutos} min` : minutos < 2880 ? `há ${Math.round(minutos / 60)} h` : `há ${Math.round(minutos / 1440)} dias`;
-    const el = $("#atualizacao");
-    if (D.demo) { el.textContent = `Estação ANA ${c.estacao.codigo}, leitura das ${hora(D.atual.hora)} (dados fictícios)`; return; }
-    el.textContent = `Estação ANA ${c.estacao.codigo}, leitura das ${hora(D.atual.hora)} (${idade})`;
-    el.classList.toggle("velho", minutos > 120);
-    if (minutos > 120) el.textContent += ". A estação pode estar sem transmitir.";
+    const st = statusDe(D.atual.nivel);
+    const t = D.atual.tendencia_cm_h;
+    const seta = t == null || Math.abs(t) < 0.5 ? "→" : t < 0 ? "↓" : "↑";
+    const tarja = $("#tarja-nivel");
+    tarja.dataset.status = st.id;
+    tarja.innerHTML = `${fmt(D.atual.nivel)} m ${seta} <span class="faixa">${esc(st.nome)}</span>`;
+    tarja.setAttribute("aria-label", `Nível do rio: ${fmt(D.atual.nivel)} metros, ${st.nome}`);
+
+    const quando = dataLocal(D.atual.hora);
+    const el = $("#boletim-hora");
+    let texto = `Boletim das ${horaCurta(D.atual.hora)} de ${SEMANA[quando.getDay()]}, ${dataCurta(D.atual.hora)}. Estação ANA ${c.estacao.codigo}.`;
+    const minutos = minutosDesde(D.atual.hora);
+    el.classList.remove("velho");
+    if (D.demo) texto += " Dados fictícios de demonstração.";
+    else if (minutos > 120) {
+      el.classList.add("velho");
+      texto += ` A última leitura tem ${minutos < 2880 ? `${Math.round(minutos / 60)} horas` : `${Math.round(minutos / 1440)} dias`}: a estação pode estar sem transmitir.`;
+    }
+    el.textContent = texto;
   }
 
   // ------------------------------------------------------------ agora
@@ -116,18 +130,46 @@
     svg.setAttribute("aria-label", `Nível nas últimas 24 horas: de ${fmt(vals[0])} m para ${fmt(vals.at(-1))} m`);
   }
 
+  function estadoRio() {
+    const t = D.atual.tendencia_cm_h;
+    if (t == null || Math.abs(t) < 0.5) return "estável";
+    const v = Math.abs(t);
+    return (t < 0 ? "baixando" : "subindo") + (v >= 3 ? " rápido" : v < 1.5 ? " devagar" : "");
+  }
+
+  function manchete() {
+    const c = D.config, n = D.atual.nivel, cota = inundacao();
+    const estado = estadoRio();
+    const acima = cota != null && n >= cota;
+    const titulo = acima ? `O ${c.rio} está acima da cota de inundação e ${estado}.` : `O ${c.rio} está ${estado}.`;
+    const dias = D.previsao_dias.slice(1);
+    const maior = (arr) => arr.reduce((a, b) => ((b.prob_inundacao ?? 0) > (a.prob_inundacao ?? 0) ? b : a), arr[0]);
+    const perto = maior(dias.slice(0, 3)), longe = maior(dias.slice(3));
+    const maxGeral = Math.max(...dias.map((d) => d.prob_inundacao ?? 0));
+    let sub;
+    if (acima) sub = "Quem mora em área de risco deve seguir as orientações da Defesa Civil: <strong>199</strong>.";
+    else if ((perto?.prob_inundacao ?? 0) >= 0.2) sub = `<strong>Pode passar da cota de inundação (${fmt(cota)} m) ${naDia(perto.data)}</strong>: chance de ${pct(perto.prob_inundacao)}.`;
+    else if ((longe?.prob_inundacao ?? 0) >= 0.2) sub = `Sem risco nos próximos 3 dias. Com a chuva prevista, <strong>pode passar de ${fmt(cota)} m ${naDia(longe.data)}</strong>: chance de ${pct(longe.prob_inundacao)}.`;
+    else if (maxGeral >= 0.05) sub = "Risco baixo de inundação nos próximos 7 dias.";
+    else sub = "Sem risco de inundação previsto para os próximos 7 dias.";
+    return [titulo, sub];
+  }
+
   function renderAgora() {
     const a = D.atual;
     const st = statusDe(a.nivel);
-    const leitura = $("#leitura");
-    leitura.dataset.status = st.id;
-    $("#status").textContent = st.nome;
+    const [m, sub] = manchete();
+    $("#manchete").textContent = m;
+    $("#submanchete").innerHTML = sub;
     $("#nivel-valor").textContent = fmt(a.nivel);
-    const [txt, sentido] = textoTendencia(a.tendencia_cm_h);
-    const tend = $("#tendencia");
-    tend.textContent = txt;
-    tend.dataset.sentido = sentido;
-    $("#diagnostico").innerHTML = diagnostico();
+    $("#leitura").dataset.status = st.id;
+    const carimbo = $("#carimbo");
+    carimbo.dataset.status = st.id;
+    carimbo.textContent = st.nome;
+    const [tend] = textoTendencia(a.tendencia_cm_h);
+    const cota = inundacao();
+    const falta = cota != null && a.nivel < cota ? ` Faltam ${fmt(cota - a.nivel)} m para a cota de inundação (${fmt(cota)} m).` : "";
+    $("#tendencia").textContent = `${tend}.${falta}`;
     renderSpark();
 
     const tbody = $("#chuva-tabela tbody");
@@ -138,8 +180,57 @@
     const link = $("#link-alertas");
     if (canal) { link.href = `https://t.me/${canal.replace(/^@/, "")}`; link.hidden = false; }
 
+    montarLocais();
+    renderLocal();
     renderRegua();
-    renderIndicadores();
+  }
+
+  // ------------------------------------------------------------ onde eu moro
+  const chaveLocal = () => `regua-viva:${D.config.slug}:local`;
+  function listaLocais() {
+    const locais = (D.config.locais || []).filter((x) => x.nome && x.cota != null);
+    if (locais.length) return locais;
+    return (D.config.regua || []).filter((x) => x.cota != null).map((x) => ({ nome: x.titulo, cota: x.cota }));
+  }
+  function localEscolhido() {
+    try {
+      const nome = localStorage.getItem(chaveLocal());
+      return listaLocais().find((x) => x.nome === nome) || null;
+    } catch (_) {
+      return null;
+    }
+  }
+  function montarLocais() {
+    const sel = $("#local-select");
+    const locais = [...listaLocais()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    sel.innerHTML = `<option value="">Escolha sua rua, bairro ou ponte</option>` +
+      locais.map((x) => `<option value="${esc(x.nome)}">${esc(x.nome)} (${fmt(x.cota)} m)</option>`).join("");
+    const e = localEscolhido();
+    if (e) sel.value = e.nome;
+  }
+  function renderLocal() {
+    const e = localEscolhido();
+    const el = $("#local-resultado");
+    el.classList.remove("perigo");
+    if (!e) {
+      el.textContent = "Escolha um lugar para saber a partir de que nível a água chega lá e se a previsão indica risco. A escolha fica guardada só neste aparelho.";
+      return;
+    }
+    const n = D.atual.nivel;
+    if (n >= e.cota) {
+      el.classList.add("perigo");
+      el.innerHTML = `<strong>O rio já passou do nível em que ${esc(e.nome)} é atingido (${fmt(e.cota)} m).</strong> Siga as orientações da Defesa Civil: 199.`;
+      return;
+    }
+    const chave = Number(e.cota).toFixed(2);
+    const dias = D.previsao_dias.slice(1);
+    const melhor = dias.reduce((a, d) => ((d.prob_cotas?.[chave] ?? 0) > (a.prob_cotas?.[chave] ?? 0) ? d : a), dias[0]);
+    const p = melhor?.prob_cotas?.[chave];
+    let previsao = "";
+    if (p != null && p < 0.01) previsao = " Pela previsão, a água não chega lá nos próximos 7 dias.";
+    else if (p != null) previsao = ` Chance de chegar lá nos próximos 7 dias: <strong>${pct(p)}</strong>, maior ${naDia(melhor.data)}.`;
+    el.innerHTML = `<strong>${esc(e.nome)}</strong> começa a ser atingido com ${fmt(e.cota)} m. O rio está <strong>${fmt(e.cota - n)} m abaixo</strong> disso.${previsao}`;
+    if (p != null && p >= 0.2) el.classList.add("perigo");
   }
 
   // ------------------------------------------------------------ régua
@@ -257,23 +348,15 @@
     });
     svg.innerHTML = partes.join("");
     el.appendChild(svg);
-  }
-
-  // ------------------------------------------------------------ indicadores
-  function renderIndicadores() {
-    const ind = D.indicadores;
-    const cotaInund = inundacao();
-    const chuva72 = D.atual.chuva_pontos.length
-      ? D.atual.chuva_pontos.reduce((s, p) => s + p.h72, 0) / D.atual.chuva_pontos.length : null;
-    const itens = [
-      ["Vazão", ind.vazao_m3s == null ? "–" : `${fmt(ind.vazao_m3s, 0)}<small>m³/s</small>`, ind.fonte_vazao ? `Estimativa ${ind.fonte_vazao}` : ""],
-      ["Pico em 30 dias", `${fmt(ind.pico_30d.nivel)}<small>m</small>`, `Em ${dataCurta(ind.pico_30d.hora)}`],
-      [`Chance de passar ${fmt(cotaInund)} m neste ano`, D.extremos?.chance_anual_inundacao != null ? pct(D.extremos.chance_anual_inundacao) : "–", D.extremos ? `Com base em ${D.extremos.n_anos} anos` : "Sem série histórica"],
-      ["Chuva nas últimas 72 h", chuva72 == null ? "–" : `${fmt(chuva72, 1)}<small>mm</small>`, "Média da bacia"],
-      ["Chuva prevista em 7 dias", `${fmt(D.fatores.chuva_7d.mm, 0)}<small>mm</small>`, "Média da bacia"],
-      ["Sem inundação", `${ind.dias_sem_inundacao_prefixo ? "+" : ""}${ind.dias_sem_inundacao}<small>${ind.dias_sem_inundacao === 1 ? "dia" : "dias"}</small>`, `Abaixo de ${fmt(cotaInund)} m`],
-    ];
-    $("#indicadores").innerHTML = itens.map(([dt, dd, sub]) => `<div><dt>${esc(dt)}</dt><dd>${dd}<span class="sub">${esc(sub)}</span></dd></div>`).join("");
+    const voce = localEscolhido();
+    if (voce && voce.cota >= base && voce.cota <= topo) {
+      const marcador = document.createElement("span");
+      marcador.className = "regua-voce";
+      marcador.textContent = "Você";
+      marcador.title = `${voce.nome}: ${fmt(voce.cota)} m`;
+      marcador.style.top = `${y(voce.cota)}px`;
+      el.appendChild(marcador);
+    }
   }
 
   // ------------------------------------------------------------ gráficos
@@ -459,68 +542,136 @@
     return p < 0.05 ? "normal" : p < 0.2 ? "atencao" : p < 0.5 ? "alerta" : "emergencia";
   }
 
-  function renderDias() {
-    $("#dias").innerHTML = D.previsao_dias.map((d, i) => {
+  function impactoDoDia(d, i, marcos) {
+    const n = D.atual.nivel;
+    if (i === 0) {
+      const marco = marcos.filter((m) => m.cota <= n).at(-1);
+      return { risco: statusDe(n).id, texto: `<span class="nivel">${fmt(n)} m</span> agora, ${estadoRio()}.${marco ? ` Marco atual: ${esc(marco.titulo)}.` : ""}` };
+    }
+    const probs = d.prob_cotas || {};
+    const possiveis = marcos
+      .filter((m) => m.cota > n)
+      .map((m) => ({ m, p: probs[Number(m.cota).toFixed(2)] ?? (d.media >= m.cota ? 1 : 0) }))
+      .filter((o) => o.p >= 0.1);
+    let texto = `<span class="nivel">${fmt(d.media)} m</span>`;
+    let risco = "normal";
+    const alvo = possiveis.at(-1);
+    if (alvo) {
+      texto += `${alvo.p >= 0.5 ? "Deve chegar a" : "Pode chegar a"} <strong>${esc(alvo.m.titulo)}</strong> (${fmt(alvo.m.cota)} m): chance de ${pct(alvo.p)}.`;
+      const st = statusDe(alvo.m.cota).id;
+      risco = st === "normal" ? "atencao" : st;
+    } else {
+      const atual = marcos.filter((m) => m.cota <= n).at(-1);
+      texto += atual && d.max < atual.cota
+        ? `Deve voltar para baixo do marco de ${fmt(atual.cota)} m (${esc(atual.titulo)}).`
+        : "Nenhum marco novo deve ser atingido.";
+    }
+    return { risco, texto };
+  }
+
+  function renderImpactos() {
+    const dias = D.previsao_dias;
+    const marcos = [...(D.config.regua || [])].filter((m) => m.cota != null).sort((a, b) => a.cota - b.cota);
+    const n = D.atual.nivel;
+    const valores = [n, ...dias.flatMap((d) => [d.min ?? d.media, d.max ?? d.media, d.media])].filter((v) => v != null);
+    let lo = Math.max(0, Math.floor(Math.min(...valores) - 0.5));
+    let hi = Math.ceil(Math.max(...valores) + 0.5);
+    const proxima = faixas().find((f) => f.cota > Math.max(...valores));
+    if (proxima) hi = Math.max(hi, Math.ceil(proxima.cota + 0.3));
+    const x = (v) => `${(((v - lo) / (hi - lo)) * 100).toFixed(2)}%`;
+    const passo = hi - lo > (window.innerWidth < 560 ? 5 : 8) ? 2 : 1;
+    const escala = [];
+    for (let m = Math.ceil(lo); m <= hi; m += passo) escala.push(`<span style="left:${x(m)}">${m} m</span>`);
+    const linhasFx = faixas().filter((f) => f.cota > lo && f.cota < hi)
+      .map((f) => `<span class="marca-cota" style="left:${x(f.cota)};background:${corStatus(f.id)}" title="${esc(f.nome)}: ${fmt(f.cota)} m"></span>`).join("");
+    const cabeca = `<li class="impacto" aria-hidden="true"><span></span><span></span><div class="impactos-escala">${escala.join("")}</div><span></span></li>`;
+    $("#impactos").innerHTML = cabeca + dias.map((d, i) => {
       const dt = dataLocal(d.data);
       const nome = i === 0 ? "Hoje" : i === 1 ? "Amanhã" : SEMANA_CURTA[dt.getDay()];
-      const st = i === 0 ? statusDe(d.media).id : statusRisco(d.prob_inundacao);
-      const nivel = i === 0
-        ? `<b>${fmt(d.media)} m</b><span>agora</span>`
-        : `<b>${fmt(d.media)} m</b><span>entre ${fmt(d.min, 1)} e ${fmt(d.max, 1)} m</span>`;
-      const risco = i === 0 ? statusDe(d.media).nome : `Chance de inundação: ${pct(d.prob_inundacao)}`;
-      return `<li class="dia${i === 0 ? " hoje" : ""}" data-status="${st}">
-        <div><span class="dia-nome">${nome}</span> <span class="dia-data">${dataCurta(d.data)}</span></div>
-        <div class="dia-tempo">${iconeTempo(d.codigo)}</div>
-        <div class="dia-temp">${d.tmax != null ? `${Math.round(d.tmax)}° / ${Math.round(d.tmin)}°` : ""}</div>
-        <div class="dia-chuva">${d.chuva_mm != null ? `${fmt(d.chuva_mm, 1)} mm` : "–"} ${d.prob != null ? `<small>${d.prob}% de chance</small>` : ""}</div>
-        <div class="dia-nivel">${nivel}</div>
-        <div class="dia-risco">${risco}</div>
+      const { risco, texto } = impactoDoDia(d, i, marcos);
+      const icone = iconeTempo(d.codigo).split("</svg>")[0] + "</svg>";
+      const faixa = i === 0 || d.min == null ? "" : `<span class="faixa-prov" style="left:${x(d.min)};width:calc(${x(d.max)} - ${x(d.min)})"></span>`;
+      const rotulo = i === 0 ? `Agora: ${fmt(n)} metros` : `Previsto: ${fmt(d.media)} metros, entre ${fmt(d.min)} e ${fmt(d.max)}`;
+      return `<li class="impacto${i === 0 ? " hoje" : ""}" data-risco="${risco}">
+        <div class="impacto-dia">${nome}<small>${dataCurta(d.data)}</small></div>
+        <div class="impacto-chuva">${icone}<span>${d.chuva_mm != null ? `${fmt(d.chuva_mm, 0)} mm` : "–"}${d.prob != null ? `<small>${d.prob}% chance</small>` : ""}</span></div>
+        <div class="alcance" role="img" aria-label="${rotulo}">${linhasFx}<span class="agora" style="left:${x(n)}"></span>${faixa}<span class="media" style="left:${x(i === 0 ? n : d.media)}"></span></div>
+        <p class="impacto-texto">${texto}</p>
       </li>`;
     }).join("");
   }
 
-  function renderFatores() {
+  function renderPorque() {
     const f = D.fatores;
-    const mapaChuva = { baixo: "normal", moderado: "atencao", alto: "alerta", "muito alto": "emergencia" };
-    const mapaSolo = { seco: "normal", "úmido": "normal", "muito úmido": "atencao", encharcado: "alerta" };
-    const linhas = [];
-    linhas.push({ t: "Chuva prevista para os próximos 7 dias", p: `${fmt(f.chuva_7d.mm, 1)} mm em média na bacia.`, selo: f.chuva_7d.nivel, st: mapaChuva[f.chuva_7d.nivel] });
+    const pontos = D.atual.chuva_pontos;
+    const partes = [];
+    if (pontos.length) {
+      const c72 = pontos.reduce((s, p) => s + p.h72, 0) / pontos.length;
+      const quanto = { baixo: "pouca chuva", moderado: "uma quantidade moderada", alto: "bastante chuva", "muito alto": "muita chuva" }[f.chuva_7d.nivel] || "";
+      partes.push(`Nas últimas 72 horas choveu em média ${fmt(c72, 1)} mm na bacia, e a previsão é de ${fmt(f.chuva_7d.mm, 0)} mm nos próximos 7 dias${quanto ? `, ${quanto}` : ""}.`);
+    }
     if (f.solo) {
-      const explica = f.solo.nivel === "encharcado" || f.solo.nivel === "muito úmido"
-        ? "Com o solo cheio de água, quase toda a chuva nova escorre direto para o rio."
-        : "O solo ainda absorve parte da chuva antes de ela chegar ao rio.";
-      linhas.push({ t: "Umidade do solo", p: `${fmt(f.solo.umidade * 100, 0)}% de água entre 9 e 27 cm de profundidade. ${explica}`, selo: f.solo.nivel, st: mapaSolo[f.solo.nivel] });
+      const cheio = f.solo.nivel === "encharcado" || f.solo.nivel === "muito úmido";
+      partes.push(`O solo está ${f.solo.nivel} (${fmt(f.solo.umidade * 100, 0)}% de água)${cheio ? ", então quase toda chuva nova escorre para o rio" : " e ainda absorve parte da chuva antes de ela chegar ao rio"}.`);
     }
     if (f.montante) {
       const v = f.montante.variacao_24h;
-      const sel = v == null ? "sem dado" : v > 0.1 ? "subindo" : v < -0.1 ? "baixando" : "estável";
-      linhas.push({
-        t: `Rio acima (${f.montante.nome})`,
-        p: `${fmt(f.montante.nivel)} m às ${f.montante.hora ? hora(f.montante.hora) : "?"}${v != null ? `, ${v >= 0 ? "+" : ""}${fmt(v)} m em 24 h` : ""} (${f.montante.fonte || "ANA"}). ` +
-          (f.montante.no_modelo
-            ? `A cheia leva cerca de ${f.montante.atraso_horas ?? "?"} h para chegar aqui, e o modelo usa essa subida como aviso antecipado.`
-            : "Ainda juntando histórico desta estação; ela entra no cálculo da previsão quando houver dados suficientes."),
-        selo: sel, st: sel === "subindo" ? "alerta" : "normal",
-      });
+      const mudou = v == null ? "sem variação medida" : Math.abs(v) < 0.05 ? "estável nas últimas 24 horas" : `${v > 0 ? "subiu" : "baixou"} ${fmt(Math.abs(v))} m em 24 horas`;
+      partes.push(`Rio acima, em ${esc(f.montante.nome)}, o nível está ${mudou}.`);
     }
-    if (f.glofas) {
-      linhas.push({
-        t: "Vazão prevista pelo sistema europeu (GloFAS)",
-        p: `Pico de ${fmt(f.glofas.pico_m3s, 0)} m³/s em ${dataCurta(f.glofas.data)}, nos próximos 30 dias. Modelo global de baixa resolução, usado só como referência.`,
-        selo: "referência", st: "normal",
-      });
-    }
-    $("#fatores").innerHTML = linhas.map((l) => `<li data-status="${l.st}"><h3>${esc(l.t)}</h3><p>${esc(l.p)}</p><span class="selo">${esc(l.selo)}</span></li>`).join("");
+    partes.push("O modelo junta tudo isso com o nível de agora e a velocidade com que o rio vem mudando.");
+    $("#porque").innerHTML = partes.join(" ");
 
     const m = D.modelo;
-    let nota;
-    if (m.tipo === "calibrado") {
-      const [ini, fim] = m.periodo;
-      nota = `<strong>Como a previsão é feita.</strong> Um modelo estatístico aprendeu, com ${m.n_dias} dias de dados desta estação (${dataCurta(ini)}/${ini.slice(0, 4)} a ${dataCurta(fim)}/${fim.slice(0, 4)}), como o rio responde à chuva na bacia. Em teste, errou em média ${fmt(m.rmse_horizonte[0])} m na previsão para o dia seguinte. A faixa sombreada mostra onde o nível deve ficar em 8 de cada 10 casos; ela fica mais larga nos dias distantes porque a previsão de chuva também erra mais. É uma estimativa, não uma certeza: siga sempre os boletins da Defesa Civil.`;
-    } else {
-      nota = `<strong>Previsão ainda não calibrada para esta estação</strong> (${esc(m.motivo || "sem histórico suficiente")}). Os valores usam coeficientes genéricos e podem errar bastante. Siga sempre os boletins da Defesa Civil.`;
-    }
-    $("#nota-modelo").innerHTML = nota;
+    $("#nota-modelo").innerHTML = m.tipo === "calibrado"
+      ? `<strong>Como a previsão é feita.</strong> Um modelo estatístico aprendeu, com ${m.n_dias} dias de dados desta estação, como o rio responde à chuva na bacia. Ele é retreinado toda semana. A faixa de cada dia mostra onde o nível deve ficar em 8 de cada 10 casos e se abre mais para cima porque, nos testes, o modelo tende a subestimar subidas fortes. É uma estimativa, não uma certeza: siga sempre a Defesa Civil.`
+      : `<strong>Previsão ainda não calibrada para esta estação</strong> (${esc(m.motivo || "sem histórico suficiente")}). Os valores usam coeficientes genéricos e podem errar bastante.`;
+    $("#glofas").innerHTML = f.glofas
+      ? `<strong>Vazão prevista pelo sistema europeu GloFAS:</strong> pico de ${fmt(f.glofas.pico_m3s, 0)} m³/s em ${dataCurta(f.glofas.data)}. É um modelo global de baixa resolução, mostrado só como referência; ele não entra na previsão acima.`
+      : "";
+  }
+
+  // ------------------------------------------------------------ rio acima (desenho)
+  function renderRioAcima() {
+    const m = D.fatores?.montante;
+    const fig = $("#rio-acima");
+    if (!m) { fig.hidden = true; return; }
+    fig.hidden = false;
+    const sh = D.serie_horaria;
+    const v24 = sh.length > 24 ? sh.at(-1)[1] - sh.at(-25)[1] : null;
+    const mudou = (v) => (v == null ? "sem dado de 24 h" : Math.abs(v) < 0.05 ? "estável em 24 h" : `${v > 0 ? "subiu" : "baixou"} ${fmt(Math.abs(v))} m em 24 h`);
+    const svg = $("#rio-desenho");
+    svg.setAttribute("viewBox", "0 0 900 220");
+    const d = "M20,120 C200,70 330,165 460,118 S720,80 880,120";
+    svg.innerHTML = `<path id="rio-caminho" class="rio-leito" d="${d}"/><path class="rio-fluxo" d="${d}"/>`;
+    const caminho = $("#rio-caminho");
+    const total = caminho.getTotalLength();
+    const p1 = caminho.getPointAtLength(total * 0.1), p2 = caminho.getPointAtLength(total * 0.9), meio = caminho.getPointAtLength(total * 0.5);
+    const estacao = (p, papel, nome, valor, sub, ancora) => `
+      <circle class="rio-estacao" cx="${p.x}" cy="${p.y}" r="11"/>
+      <text class="rio-papel" x="${p.x}" y="${p.y - 50}" text-anchor="${ancora}">${esc(papel)}</text>
+      <text class="rio-nome" x="${p.x}" y="${p.y - 26}" text-anchor="${ancora}">${esc(nome)}</text>
+      <text class="rio-valor" x="${p.x}" y="${p.y + 50}" text-anchor="${ancora}">${fmt(valor)} m</text>
+      <text class="rio-sub" x="${p.x}" y="${p.y + 72}" text-anchor="${ancora}">${esc(sub)}</text>`;
+    svg.insertAdjacentHTML("beforeend",
+      estacao(p1, "rio acima", m.nome, m.nivel, mudou(m.variacao_24h), "start") +
+      estacao(p2, "aqui", D.config.estacao.nome || D.config.local, D.atual.nivel, mudou(v24), "end") +
+      `<text class="rio-tempo" x="${meio.x}" y="${meio.y + 48}" text-anchor="middle">a água desce ${m.atraso_horas ? `em cerca de ${m.atraso_horas} h` : "até aqui"} →</text>`);
+    svg.setAttribute("aria-label", `${m.nome}, rio acima: ${fmt(m.nivel)} metros, ${mudou(m.variacao_24h)}. ${D.config.estacao.nome}: ${fmt(D.atual.nivel)} metros.`);
+    $("#rio-acima-nota").textContent = m.no_modelo
+      ? `Quando o rio sobe em ${m.nome}, a subida chega aqui depois. O modelo já usa essa estação como aviso antecipado.`
+      : `Quando o rio sobe em ${m.nome}, a subida chega aqui depois. Por enquanto é só informação: a estação entra no cálculo da previsão quando houver histórico suficiente (cerca de 90 dias de dados).`;
+  }
+
+  // ------------------------------------------------------------ gráfico com alternância
+  let graficoAtivo = "7d";
+  function mostrarGrafico(qual) {
+    graficoAtivo = qual;
+    $("#caixa-7d").hidden = qual !== "7d";
+    $("#caixa-48h").hidden = qual !== "48h";
+    $$("#alterna-grafico button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.grafico === qual));
+    if (typeof Chart === "undefined") return;
+    if (qual === "7d") grafico7d(); else grafico48h();
   }
 
   const cm = (m) => (m == null ? "–" : `${Math.round(m * 100)} cm`);
@@ -567,14 +718,6 @@
     }
   }
 
-  function renderPrevisao() {
-    grafico48h();
-    grafico7d();
-    renderDias();
-    renderFatores();
-    renderPlacar();
-  }
-
   // ------------------------------------------------------------ histórico
   let diasHistorico = 30;
   function graficoHistorico() {
@@ -591,7 +734,8 @@
     $("#resumo-historico").innerHTML = `
       <div><dt>Mais alto</dt><dd>${fmt(pico[1])} m<small>${dataCurta(pico[0])}</small></dd></div>
       <div><dt>Mais baixo</dt><dd>${fmt(minimo[1])} m<small>${dataCurta(minimo[0])}</small></dd></div>
-      <div><dt>Média</dt><dd>${fmt(media)} m</dd></div>`;
+      <div><dt>Média</dt><dd>${fmt(media)} m</dd></div>
+      ${D.indicadores?.vazao_m3s != null ? `<div><dt>Vazão agora</dt><dd>${fmt(D.indicadores.vazao_m3s, 0)} m³/s<small>${esc(D.indicadores.fonte_vazao || "")}</small></dd></div>` : ""}`;
 
     const mostrarPontes = $("#mostrar-pontes").checked;
     const linhas = linhasFaixas();
@@ -647,46 +791,79 @@
   function renderCheias() {
     const lista = [...(D.config.cheias_historicas || [])].sort((a, b) => b.cota - a.cota);
     if (!lista.length) { $("#bloco-cheias").hidden = true; return; }
-    const pontes = D.config.pontes || [];
-    $("#cheias").innerHTML = lista.map((c) => `
-      <li class="cheia">
-        <div class="cheia-cota">${fmt(c.cota)}<small>metros</small></div>
-        <h3>${esc(dataLonga(c.data))}</h3>
-        <p>${esc(c.texto || "")}</p>
-        ${pontes.length ? `<ul class="pontes" aria-label="Situação das pontes">${pontes.map((p) =>
-          `<li class="${c.cota >= p.cota ? "coberta" : "livre"}">${esc(p.nome)}: ${c.cota >= p.cota ? "coberta" : "livre"}</li>`).join("")}</ul>` : ""}
-      </li>`).join("");
+    const pontes = [...(D.config.pontes || [])].sort((a, b) => a.cota - b.cota);
+    const topo = Math.ceil(Math.max(...lista.map((c) => c.cota), ...pontes.map((p) => p.cota), 1) + 0.5);
+    const x = (v) => `${((v / topo) * 100).toFixed(2)}%`;
+    const linhas = pontes.map((p) => `<span class="cheia-ponte" style="left:${x(p.cota)}"></span>`).join("");
+    const curto = (nome) => nome.replace(/^Ponte\s+(da\s+|do\s+|de\s+)?/i, "");
+    const cabeca = pontes.length ? `<div class="cheias-cabeca" aria-hidden="true"><span>Pontes</span><div class="cheias-trilho">${
+      pontes.map((p, i) => `<span class="rotulo-ponte" style="left:${x(p.cota)};bottom:${i % 2 ? 20 : 4}px;${p.cota / topo > 0.8 ? "transform:translateX(-100%)" : p.cota / topo < 0.15 ? "transform:none" : ""}">${esc(curto(p.nome))} ${fmt(p.cota, 1)}</span>`).join("")
+    }</div></div>` : "";
+    $("#cheias").innerHTML = cabeca + lista.map((c) => {
+      const cobertas = pontes.filter((p) => c.cota >= p.cota).map((p) => p.nome);
+      const resumo = pontes.length ? (cobertas.length ? `Cobriu: ${cobertas.join(", ")}.` : "Não cobriu nenhuma ponte.") : "";
+      return `<div class="cheia">
+        <div class="cheia-info"><b>${fmt(c.cota)} m</b><span>${esc(dataLonga(c.data))}</span></div>
+        <div class="cheia-trilho" role="img" aria-label="${fmt(c.cota)} metros. ${esc(resumo)}"><span class="cheia-barra" style="width:${x(c.cota)}"></span>${linhas}</div>
+        <p class="cheia-texto">${esc(c.texto || "")} ${esc(resumo)}</p>
+      </div>`;
+    }).join("");
   }
 
   function renderHistorico() {
-    graficoHistorico();
-    graficoGumbel();
+    if (typeof Chart !== "undefined") { graficoHistorico(); graficoGumbel(); }
+    const e = D.extremos, cota = inundacao();
+    $("#chance-anual").innerHTML = e?.chance_anual_inundacao != null
+      ? `<b>${pct(e.chance_anual_inundacao)}</b> de chance de o rio passar de ${fmt(cota)} m em um ano qualquer.`
+      : "";
     renderCheias();
   }
 
   // ------------------------------------------------------------ emergência
   function renderEmergencia() {
     const ct = D.config.contatos || {};
+    const tel = (n) => `tel:${n.replace(/[^\d+]/g, "")}`;
     const orgaos = (ct.orgaos || []).filter((o) => o.nome && (o.fixo || o.plantao));
-    if (orgaos.length) {
-      $("#bloco-orgaos").hidden = false;
-      $("#orgaos").innerHTML = orgaos.map((o) => {
-        const tel = (n) => `tel:${n.replace(/[^\d+]/g, "")}`;
-        return `<li><h3>${esc(o.nome)}</h3><p>${esc(o.descricao || "")}</p><div class="acoes">
-          ${o.fixo ? `<a class="botao" href="${tel(o.fixo)}">Fixo ${esc(o.fixo)}</a>` : ""}
-          ${o.plantao ? `<a class="botao botao-urgente" href="${tel(o.plantao)}">Plantão ${esc(o.plantao)}</a>` : ""}
-        </div></li>`;
-      }).join("");
-    }
+    $("#bloco-orgaos").hidden = !orgaos.length;
+    $("#orgaos").innerHTML = orgaos.map((o) => `<li><h4>${esc(o.nome)}</h4><p>${esc(o.descricao || "")}</p><div class="acoes">
+        ${o.plantao ? `<a class="botao botao-forte" href="${tel(o.plantao)}">Plantão ${esc(o.plantao)}</a>` : ""}
+        ${o.fixo ? `<a class="botao" href="${tel(o.fixo)}">Fixo ${esc(o.fixo)}</a>` : ""}
+      </div></li>`).join("");
     const abrigos = (ct.abrigos || []).filter((a) => a.nome);
-    if (abrigos.length) {
-      $("#bloco-abrigos").hidden = false;
-      const porCidade = {};
-      abrigos.forEach((a) => (porCidade[a.cidade || ""] ||= []).push(a));
-      $("#abrigos").innerHTML = Object.entries(porCidade).map(([cid, lista]) => `
-        <div>${cid ? `<h3>${esc(cid)}</h3>` : ""}<ul>${lista.map((a) => `<li><strong>${esc(a.nome)}</strong>
-          <span>${esc([a.endereco, a.capacidade ? `Capacidade para ${Number(a.capacidade).toLocaleString("pt-BR")} pessoas` : "", a.obs].filter(Boolean).join(". "))}</span></li>`).join("")}</ul></div>`).join("");
-    }
+    $("#bloco-abrigos").hidden = !abrigos.length;
+    const porCidade = {};
+    abrigos.forEach((a) => (porCidade[a.cidade || ""] ||= []).push(a));
+    $("#abrigos").innerHTML = Object.entries(porCidade).map(([cid, lista]) => `
+      <div>${cid ? `<h4>${esc(cid)}</h4>` : ""}<ul>${lista.map((a) => `<li><strong>${esc(a.nome)}</strong>
+        <span>${esc([a.endereco, a.capacidade ? `Capacidade para ${Number(a.capacidade).toLocaleString("pt-BR")} pessoas` : "", a.obs].filter(Boolean).join(". "))}</span></li>`).join("")}</ul></div>`).join("");
+    renderPlano();
+  }
+
+  function renderPlano() {
+    const c = D.config;
+    const local = localEscolhido();
+    const ct = c.contatos || {};
+    const orgaos = (ct.orgaos || []).filter((o) => o.nome && (o.plantao || o.fixo));
+    const abrigos = (ct.abrigos || []).filter((a) => a.nome);
+    const campo = (rotulo, valor = "") => `<div class="plano-campo"><span>${rotulo}</span><span class="linha-escrever">${valor}</span></div>`;
+    const site = c.url_site || location.href.split("#")[0].split("?")[0];
+    $("#plano-conteudo").innerHTML = `<div class="plano-folha">
+      <h4>Plano da família para cheias</h4>
+      <p>${esc(c.rio)}, ${esc(c.local)}. Nível do rio e previsão: ${esc(site)}</p>
+      ${campo("Nosso lugar é atingido com:", local ? `${esc(local.nome)}: ${fmt(local.cota)} m` : "")}
+      ${campo("Combinamos sair de casa com o rio em:")}
+      ${campo("Abrigo ou casa combinada:")}
+      ${campo("Ponto de encontro da família:")}
+      ${campo("Quem busca crianças e idosos:")}
+      ${campo("Para onde vão os animais:")}
+      <div><strong>Telefones</strong><div class="plano-telefones"><span>Defesa Civil 199</span><span>Bombeiros 193</span><span>SAMU 192</span><span>Polícia 190</span>${
+        orgaos.map((o) => `<span>${esc(o.nome)}: ${esc(o.plantao || o.fixo)}</span>`).join("")}</div></div>
+      ${abrigos.length ? `<div><strong>Abrigos da cidade</strong><ul class="plano-lista">${abrigos.map((a) => `<li>${esc(a.nome)}${a.endereco ? `, ${esc(a.endereco)}` : ""}</li>`).join("")}</ul></div>` : ""}
+      <div><strong>Mochila pronta</strong><ul class="plano-lista"><li>Documentos em saco plástico</li><li>Remédios e receitas</li><li>Carregador e bateria extra</li><li>Lanterna e pilhas</li><li>Roupa, agasalho e cobertor</li><li>Ração, coleira e remédios dos animais</li></ul></div>
+    </div>`;
+    $("#orientacoes").innerHTML = c.orientacoes_url
+      ? `Orientações oficiais sobre o que fazer antes, durante e depois de uma enchente: <a href="${esc(c.orientacoes_url)}" target="_blank" rel="noopener">Defesa Civil estadual</a>.`
+      : "";
   }
 
   // ------------------------------------------------------------ rodapé e compartilhar
@@ -730,57 +907,144 @@
     setTimeout(() => { botao.textContent = "Compartilhar boletim"; }, 2500);
   }
 
-  // ------------------------------------------------------------ abas
-  const renderPorAba = { previsao: renderPrevisao, historico: renderHistorico, emergencia: renderEmergencia };
-  function abrirAba(nome, focar = false) {
-    $$(".abas [role=tab]").forEach((b) => {
-      const ativa = b.id === `aba-${nome}`;
-      b.setAttribute("aria-selected", ativa);
-      b.tabIndex = ativa ? 0 : -1;
-      if (ativa && focar) b.focus();
-      $(`#${b.getAttribute("aria-controls")}`).hidden = !ativa;
-    });
-    if (renderPorAba[nome] && !renderizadas.has(nome)) { renderPorAba[nome](); renderizadas.add(nome); }
-    if (nome === "agora") renderRegua();
-    if (location.hash !== `#${nome}`) history.replaceState(null, "", `#${nome}`);
+  // ------------------------------------------------------------ boletim em imagem (WhatsApp)
+  function escreverQuebrando(g, texto, x, y, largura, alturaLinha) {
+    const palavras = texto.split(/\s+/);
+    let linha = "";
+    for (const p of palavras) {
+      const teste = linha ? `${linha} ${p}` : p;
+      if (g.measureText(teste).width > largura && linha) { g.fillText(linha, x, y); y += alturaLinha; linha = p; } else linha = teste;
+    }
+    if (linha) { g.fillText(linha, x, y); y += alturaLinha; }
+    return y;
+  }
+
+  async function boletimImagem() {
+    const botao = $("#boletim-imagem");
+    const original = botao.textContent;
+    try {
+      if (document.fonts?.ready) await document.fonts.ready;
+      const W = 1080, H = 1350;
+      const cv = document.createElement("canvas");
+      cv.width = W; cv.height = H;
+      const g = cv.getContext("2d");
+      const c = D.config, a = D.atual, st = statusDe(a.nivel);
+      const cores = { normal: ["#2E7D4F", "#fff"], atencao: ["#F2C200", "#121A1E"], alerta: ["#E8710A", "#121A1E"], emergencia: ["#C62828", "#fff"], extremo: ["#5E2A84", "#fff"] };
+      const [cor, corTexto] = cores[st.id] || cores.normal;
+      const cond = (peso, px) => `${peso} ${px}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+      const corpo = (peso, px) => `${peso} ${px}px "Atkinson Hyperlegible", Arial, sans-serif`;
+      g.fillStyle = "#F4F6F6"; g.fillRect(0, 0, W, H);
+      g.fillStyle = "#121A1E"; g.fillRect(0, 0, W, 140);
+      g.fillStyle = "#F4F6F6"; g.font = cond(800, 64); g.fillText(c.nome_app.toUpperCase(), 64, 94);
+      g.fillStyle = "#45535A"; g.font = corpo(400, 32);
+      g.fillText(`${c.rio}, ${c.local}`, 64, 205);
+      g.fillText(`Leitura das ${horaCurta(a.hora)} de ${dataCurta(a.hora)}`, 64, 248);
+      g.fillStyle = "#121A1E"; g.font = cond(800, 250);
+      const numero = fmt(a.nivel);
+      g.fillText(numero, 54, 500);
+      const wNum = g.measureText(numero).width;
+      g.font = cond(800, 96); g.fillStyle = "#45535A"; g.fillText("m", 54 + wNum + 14, 500);
+      g.font = cond(800, 54);
+      const nomeFaixa = st.nome.toUpperCase();
+      const wFx = g.measureText(nomeFaixa).width;
+      g.fillStyle = cor; g.fillRect(64, 540, wFx + 48, 80);
+      g.fillStyle = corTexto; g.fillText(nomeFaixa, 88, 600);
+      g.fillStyle = "#45535A"; g.font = cond(700, 44); g.fillText(textoTendencia(a.tendencia_cm_h)[0], 64 + wFx + 76, 596);
+      const [tit, sub] = manchete();
+      g.fillStyle = "#121A1E"; g.font = cond(800, 66);
+      let yy = escreverQuebrando(g, tit, 64, 730, W - 128, 70);
+      g.font = corpo(400, 36); g.fillStyle = "#121A1E";
+      yy = escreverQuebrando(g, sub.replace(/<[^>]+>/g, ""), 64, yy + 14, W - 128, 48);
+      const topoDias = Math.max(yy + 40, 1010);
+      g.fillStyle = "#121A1E"; g.fillRect(64, topoDias, W - 128, 4);
+      D.previsao_dias.slice(1, 4).forEach((d, i) => {
+        const x0 = 64 + i * 320;
+        g.fillStyle = "#45535A"; g.font = cond(700, 38);
+        g.fillText(i === 0 ? "AMANHÃ" : SEMANA_CURTA[dataLocal(d.data).getDay()].toUpperCase(), x0, topoDias + 58);
+        g.fillStyle = "#121A1E"; g.font = cond(800, 64); g.fillText(`${fmt(d.media)} m`, x0, topoDias + 124);
+        g.fillStyle = "#45535A"; g.font = corpo(400, 26);
+        if (d.min != null) g.fillText(`entre ${fmt(d.min, 1)} e ${fmt(d.max, 1)}`, x0, topoDias + 162);
+      });
+      g.fillStyle = "#45535A"; g.font = corpo(400, 28);
+      g.fillText((c.url_site || location.href.split("#")[0]).replace(/^https?:\/\//, ""), 64, H - 140);
+      g.fillStyle = "#C62828"; g.fillRect(0, H - 110, W, 110);
+      g.fillStyle = "#fff"; g.font = cond(800, 50); g.fillText("EMERGÊNCIA: DEFESA CIVIL 199", 64, H - 38);
+      const blob = await new Promise((ok) => cv.toBlob(ok, "image/png"));
+      const arquivo = new File([blob], `boletim-${c.slug}.png`, { type: "image/png" });
+      const texto = `${textoBoletim()}\n${c.url_site || location.href.split("#")[0]}`;
+      if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+        await navigator.share({ files: [arquivo], text: texto });
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url; link.download = arquivo.name;
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      botao.textContent = "Imagem baixada: é só mandar no WhatsApp";
+    } catch (e) {
+      if (e?.name === "AbortError") return;
+      botao.textContent = "Não foi possível gerar a imagem";
+    }
+    setTimeout(() => { botao.textContent = original; }, 3000);
+  }
+
+  // ------------------------------------------------------------ navegação
+  function renderTudo() {
+    renderTopo();
+    renderAgora();
+    renderImpactos();
+    renderRioAcima();
+    mostrarGrafico(graficoAtivo);
+    renderPorque();
+    renderPlacar();
+    renderHistorico();
+    renderEmergencia();
+    renderRodape();
   }
 
   function ligarEventos() {
-    const abas = $$(".abas [role=tab]");
-    abas.forEach((b, i) => {
-      b.addEventListener("click", () => abrirAba(b.id.replace("aba-", "")));
-      b.addEventListener("keydown", (e) => {
-        const passo = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-        if (!passo) return;
-        e.preventDefault();
-        abrirAba(abas[(i + passo + abas.length) % abas.length].id.replace("aba-", ""), true);
-      });
-    });
-    $$(".segmentado button").forEach((b) => b.addEventListener("click", () => {
-      $$(".segmentado button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    $$("#periodo-historico button").forEach((b) => b.addEventListener("click", () => {
+      $$("#periodo-historico button").forEach((x) => x.setAttribute("aria-pressed", x === b));
       diasHistorico = Number(b.dataset.dias);
-      graficoHistorico();
+      if (typeof Chart !== "undefined") graficoHistorico();
     }));
-    $("#mostrar-pontes").addEventListener("change", graficoHistorico);
+    $$("#alterna-grafico button").forEach((b) => b.addEventListener("click", () => mostrarGrafico(b.dataset.grafico)));
+    $("#mostrar-pontes").addEventListener("change", () => { if (typeof Chart !== "undefined") graficoHistorico(); });
     $("#compartilhar").addEventListener("click", compartilhar);
+    $("#boletim-imagem").addEventListener("click", boletimImagem);
+    $("#imprimir-plano").addEventListener("click", () => window.print());
+    $("#local-select").addEventListener("change", (ev) => {
+      try {
+        if (ev.target.value) localStorage.setItem(chaveLocal(), ev.target.value);
+        else localStorage.removeItem(chaveLocal());
+      } catch (_) { /* navegador sem armazenamento: vale só nesta visita */ }
+      renderLocal();
+      renderRegua();
+      renderPlano();
+    });
 
     let espera;
-    window.addEventListener("resize", () => {
-      clearTimeout(espera);
-      espera = setTimeout(() => { if (!$("#painel-agora").hidden) renderRegua(); }, 150);
-    });
-    // redesenha cores dos gráficos quando o tema muda
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-      renderRegua();
-      renderizadas.forEach((n) => renderPorAba[n]?.());
-    });
+    window.addEventListener("resize", () => { clearTimeout(espera); espera = setTimeout(renderRegua, 150); });
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderTudo);
+
+    // destaca no menu a seção que está na tela
+    if ("IntersectionObserver" in window) {
+      const links = $$(".atalhos a");
+      const obs = new IntersectionObserver((itens) => {
+        itens.forEach((it) => {
+          if (it.isIntersecting) links.forEach((l) => l.classList.toggle("ativo", l.getAttribute("href") === `#${it.target.id}`));
+        });
+      }, { rootMargin: "-45% 0px -50% 0px" });
+      $$("main > section").forEach((sec) => obs.observe(sec));
+    }
   }
 
   function mostrarErro(msg) {
     const el = $("#erro");
     el.textContent = msg;
     el.hidden = false;
-    $$(".painel").forEach((p) => (p.hidden = true));
+    $$("main > section").forEach((p) => (p.hidden = true));
   }
 
   async function iniciar() {
@@ -791,14 +1055,11 @@
       return;
     }
     if (typeof Chart !== "undefined") Chart.register(linhasPlugin);
-    else Object.keys(renderPorAba).forEach((k) => { if (k !== "emergencia") renderPorAba[k] = () => {}; });
     ligarEventos();
-    renderTopo();
-    renderAgora();
-    renderRodape();
-    const inicial = location.hash.replace("#", "");
-    abrirAba(["agora", "previsao", "historico", "emergencia"].includes(inicial) ? inicial : "agora");
+    renderTudo();
+    if (location.hash) $(location.hash)?.scrollIntoView();
   }
+
 
   iniciar();
 })();

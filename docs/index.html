@@ -3,208 +3,205 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Monitor de cheias</title>
-  <meta name="description" content="Nível do rio em tempo real, previsão e contatos de emergência.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='11' y='2' width='10' height='28' fill='white' stroke='%2313262F' stroke-width='2'/><rect x='12' y='18' width='8' height='11' fill='%231C6E8C'/></svg>">
+  <title>Régua Viva</title>
+  <meta name="description" content="Nível do rio agora, o que deve acontecer nos próximos dias e o que fazer se a água subir.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='10' y='2' width='12' height='28' fill='white' stroke='%23121A1E' stroke-width='2'/><path d='M11 6h6M11 10h4M11 14h6' stroke='%23121A1E' stroke-width='2'/><rect x='11' y='18' width='10' height='11' fill='%231C6E8C'/></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="estilo.css">
 </head>
 <body>
   <div id="demo-aviso" class="demo-aviso" hidden>Demonstração com dados fictícios. Não use para decisões reais.</div>
 
-  <header class="topo">
-    <div class="topo-marca">
-      <svg class="topo-icone" viewBox="0 0 32 32" aria-hidden="true"><rect x="11" y="2" width="10" height="28" rx="1" class="i-esmalte"/><rect x="12" y="18" width="8" height="11" class="i-agua"/><path d="M11 7h5M11 12h5M11 17h5" class="i-traco"/></svg>
-      <div>
-        <h1 id="nome-app">Monitor de cheias</h1>
-        <p id="local" class="topo-local"></p>
+  <header class="tarja" id="tarja">
+    <div class="tarja-linha">
+      <a class="marca" href="#boletim">
+        <svg class="marca-icone" viewBox="0 0 32 32" aria-hidden="true"><rect x="10" y="2" width="12" height="28" class="i-esmalte"/><path d="M11 6h6M11 10h4M11 14h6" class="i-traco"/><rect x="11" y="18" width="10" height="11" class="i-agua"/></svg>
+        <span><strong id="nome-app">Régua Viva</strong><small id="local"></small></span>
+      </a>
+      <div class="tarja-direita">
+        <p class="tarja-nivel" id="tarja-nivel" aria-live="polite"></p>
+        <a class="tarja-199" href="tel:199" aria-label="Ligar para a Defesa Civil, 199">Defesa Civil <b>199</b></a>
       </div>
     </div>
-    <div class="topo-lado">
-      <label id="seletor-cidade-rotulo" class="seletor" hidden>
-        <span class="sr">Cidade</span>
-        <select id="seletor-cidade"></select>
-      </label>
-      <p id="atualizacao" class="atualizacao"></p>
-    </div>
+    <nav class="atalhos" aria-label="Seções da página">
+      <a href="#boletim">Agora</a>
+      <a href="#proximos">Próximos dias</a>
+      <a href="#historico">Histórico</a>
+      <a href="#emergencia">Se a água subir</a>
+      <label id="seletor-cidade-rotulo" class="seletor" hidden><span class="sr">Cidade</span><select id="seletor-cidade"></select></label>
+    </nav>
   </header>
-
-  <nav class="abas" role="tablist" aria-label="Seções">
-    <button role="tab" id="aba-agora" aria-controls="painel-agora" aria-selected="true">Agora</button>
-    <button role="tab" id="aba-previsao" aria-controls="painel-previsao" aria-selected="false">Previsão</button>
-    <button role="tab" id="aba-historico" aria-controls="painel-historico" aria-selected="false">Histórico</button>
-    <button role="tab" id="aba-emergencia" aria-controls="painel-emergencia" aria-selected="false">Emergência</button>
-  </nav>
 
   <main>
     <p id="erro" class="erro" hidden></p>
 
-    <!-- AGORA -->
-    <section id="painel-agora" role="tabpanel" aria-labelledby="aba-agora" class="painel">
-      <div class="agora">
-        <div class="leitura" id="leitura">
-          <p class="status" id="status"></p>
-          <p class="nivel"><span id="nivel-valor">–</span><span class="nivel-unidade">m</span></p>
-          <p class="tendencia" id="tendencia"></p>
-          <p class="diagnostico" id="diagnostico"></p>
-          <figure class="spark">
-            <svg id="spark" viewBox="0 0 300 64" preserveAspectRatio="none" role="img" aria-label="Nível nas últimas 24 horas"></svg>
-            <figcaption>Últimas 24 horas</figcaption>
-          </figure>
-          <table class="chuva-tabela" id="chuva-tabela">
-            <caption>Chuva na bacia</caption>
-            <thead><tr><th scope="col">Local</th><th scope="col">24 h</th><th scope="col">72 h</th></tr></thead>
-            <tbody></tbody>
-          </table>
+    <!-- 1. BOLETIM -->
+    <section id="boletim" class="secao secao-boletim" aria-labelledby="manchete">
+      <p class="boletim-hora" id="boletim-hora"></p>
+      <h1 class="manchete" id="manchete"></h1>
+      <p class="submanchete" id="submanchete"></p>
+
+      <div class="boletim-grade">
+        <div class="coluna-leitura">
+          <div class="leitura" id="leitura">
+            <p class="numero"><span id="nivel-valor">–</span><span class="unidade">m</span></p>
+            <p class="carimbo" id="carimbo"></p>
+            <p class="tendencia" id="tendencia"></p>
+            <figure class="spark">
+              <svg id="spark" viewBox="0 0 300 56" preserveAspectRatio="none" role="img" aria-label="Nível nas últimas 24 horas"></svg>
+              <figcaption>Últimas 24 horas</figcaption>
+            </figure>
+          </div>
+
+          <div class="onde" id="onde">
+            <label for="local-select" class="onde-titulo">Onde eu moro</label>
+            <select id="local-select"><option value="">Escolha sua rua, bairro ou ponte</option></select>
+            <p class="onde-resultado" id="local-resultado">Escolha um lugar para saber a partir de que nível a água chega lá e se a previsão indica risco. A escolha fica guardada só neste aparelho.</p>
+          </div>
+
           <div class="acoes">
-            <button type="button" class="botao" id="compartilhar">Compartilhar boletim</button>
+            <button type="button" class="botao botao-forte" id="boletim-imagem">Mandar boletim no WhatsApp</button>
+            <button type="button" class="botao" id="compartilhar">Copiar texto do boletim</button>
             <a class="botao" id="link-alertas" hidden target="_blank" rel="noopener">Receber alertas no Telegram</a>
-            <a class="botao botao-urgente" href="tel:199">Ligar para a Defesa Civil (199)</a>
           </div>
         </div>
 
         <figure class="regua-bloco">
-          <figcaption>
-            <h2>O que acontece em cada nível</h2>
-            <p>Régua em escala. A água mostra onde o rio está agora.</p>
-          </figcaption>
+          <figcaption>A régua da cidade: em escala, com a água na altura de agora.</figcaption>
           <div class="regua" id="regua"></div>
         </figure>
       </div>
-
-      <dl class="indicadores" id="indicadores"></dl>
     </section>
 
-    <!-- PREVISÃO -->
-    <section id="painel-previsao" role="tabpanel" aria-labelledby="aba-previsao" class="painel" hidden>
-      <article class="bloco">
-        <header class="bloco-topo">
-          <h2>Próximas 48 horas</h2>
-          <p id="diag-48h" class="bloco-nota"></p>
-        </header>
-        <div class="grafico"><canvas id="graf-48h" aria-label="Nível observado e previsto nas próximas 48 horas"></canvas></div>
-      </article>
+    <!-- 2. PRÓXIMOS DIAS -->
+    <section id="proximos" class="secao" aria-labelledby="t-proximos">
+      <h2 id="t-proximos">Próximos dias</h2>
+      <p class="secao-nota">Cada linha mostra onde o rio deve ficar em cada dia (a faixa é onde ele fica em 8 de cada 10 casos) e o que isso significa na cidade.</p>
+      <ol class="impactos" id="impactos"></ol>
 
-      <article class="bloco">
-        <header class="bloco-topo">
-          <h2>Próximos 7 dias</h2>
-          <p id="diag-7d" class="bloco-nota"></p>
-        </header>
-        <div class="grafico grafico-alto"><canvas id="graf-7d" aria-label="Nível e chuva, observados e previstos, em 7 dias"></canvas></div>
-        <ol class="dias" id="dias"></ol>
-      </article>
+      <figure class="rio-acima" id="rio-acima" hidden>
+        <figcaption>
+          <h3>A água que vem de cima</h3>
+          <p id="rio-acima-nota"></p>
+        </figcaption>
+        <svg id="rio-desenho" viewBox="0 0 720 190" role="img"></svg>
+      </figure>
 
-      <article class="bloco">
-        <header class="bloco-topo">
-          <h2>O que o modelo está levando em conta</h2>
-        </header>
-        <ul class="fatores" id="fatores"></ul>
-      </article>
+      <div class="subsecao">
+        <div class="subsecao-topo">
+          <h3>Em gráfico</h3>
+          <div class="segmentado" role="group" aria-label="Período do gráfico" id="alterna-grafico">
+            <button type="button" data-grafico="7d" aria-pressed="true">7 dias</button>
+            <button type="button" data-grafico="48h" aria-pressed="false">48 horas</button>
+          </div>
+        </div>
+        <div id="caixa-7d">
+          <div class="grafico grafico-alto"><canvas id="graf-7d" aria-label="Nível e chuva, observados e previstos, em 7 dias"></canvas></div>
+          <p class="grafico-nota" id="diag-7d"></p>
+        </div>
+        <div id="caixa-48h" hidden>
+          <div class="grafico"><canvas id="graf-48h" aria-label="Nível observado e previsto nas próximas 48 horas"></canvas></div>
+          <p class="grafico-nota" id="diag-48h"></p>
+        </div>
+      </div>
 
-      <article class="bloco" id="bloco-placar">
-        <header class="bloco-topo">
-          <h2>A previsão tem acertado?</h2>
-          <p class="bloco-nota">Todo dia às 7h o site guarda a previsão. Quando o dia chega, compara com o nível médio que o rio de fato teve.</p>
-        </header>
+      <div class="subsecao">
+        <h3>Por que essa previsão</h3>
+        <p class="porque" id="porque"></p>
+      </div>
+
+      <div class="subsecao" id="bloco-placar">
+        <h3>A previsão tem acertado?</h3>
+        <p class="secao-nota">Todo dia às 7h o site guarda a previsão. Quando o dia chega, compara com o nível médio que o rio de fato teve.</p>
         <div id="placar"></div>
-      </article>
+      </div>
 
-      <aside class="nota-modelo" id="nota-modelo"></aside>
+      <details class="tecnico">
+        <summary>Detalhes técnicos</summary>
+        <div class="tecnico-corpo">
+          <p id="nota-modelo"></p>
+          <table class="tabela" id="chuva-tabela">
+            <caption>Chuva por ponto da bacia</caption>
+            <thead><tr><th scope="col">Local</th><th scope="col">Últimas 24 h</th><th scope="col">Últimas 72 h</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p id="glofas"></p>
+        </div>
+      </details>
     </section>
 
-    <!-- HISTÓRICO -->
-    <section id="painel-historico" role="tabpanel" aria-labelledby="aba-historico" class="painel" hidden>
-      <article class="bloco">
-        <header class="bloco-topo bloco-topo-linha">
-          <h2>Nível do rio</h2>
-          <div class="segmentado" role="group" aria-label="Período">
+    <!-- 3. HISTÓRICO -->
+    <section id="historico" class="secao" aria-labelledby="t-historico">
+      <h2 id="t-historico">Histórico</h2>
+      <div class="subsecao">
+        <div class="subsecao-topo">
+          <h3>O rio nos últimos dias</h3>
+          <div class="segmentado" role="group" aria-label="Período" id="periodo-historico">
             <button type="button" data-dias="30" aria-pressed="true">30 dias</button>
             <button type="button" data-dias="90" aria-pressed="false">90 dias</button>
             <button type="button" data-dias="180" aria-pressed="false">180 dias</button>
             <button type="button" data-dias="365" aria-pressed="false">1 ano</button>
           </div>
-        </header>
+        </div>
         <dl class="resumo" id="resumo-historico"></dl>
         <div class="grafico grafico-alto"><canvas id="graf-historico" aria-label="Série histórica do nível do rio"></canvas></div>
         <label class="alternar"><input type="checkbox" id="mostrar-pontes" checked> Mostrar a altura das pontes</label>
-      </article>
+      </div>
 
-      <article class="bloco" id="bloco-extremos">
-        <header class="bloco-topo">
-          <h2>Com que frequência o rio chega a cada altura</h2>
-          <p class="bloco-nota" id="extremos-fonte"></p>
-        </header>
+      <div class="subsecao" id="bloco-extremos">
+        <h3>Com que frequência o rio chega a cada altura</h3>
+        <p class="destaque-numero" id="chance-anual"></p>
+        <p class="secao-nota" id="extremos-fonte"></p>
         <div class="extremos">
-          <div class="grafico"><canvas id="graf-gumbel" aria-label="Cota esperada por tempo de retorno"></canvas></div>
+          <div class="grafico"><canvas id="graf-gumbel" aria-label="Altura esperada por tempo de retorno"></canvas></div>
           <div>
             <table class="tabela" id="tabela-retorno">
               <thead><tr><th scope="col">Cheia</th><th scope="col">Acontece a cada</th><th scope="col">Chega a</th><th scope="col">Chance por ano</th></tr></thead>
               <tbody></tbody>
             </table>
-            <p class="explica">Uma cheia “de 100 anos” não acontece uma vez por século. Ela tem 1% de chance de acontecer em qualquer ano, inclusive dois anos seguidos.</p>
+            <p class="secao-nota">Uma cheia “de 100 anos” não acontece uma vez por século: ela tem 1% de chance em qualquer ano, inclusive em dois anos seguidos.</p>
           </div>
         </div>
-      </article>
+      </div>
 
-      <article class="bloco" id="bloco-cheias">
-        <header class="bloco-topo">
-          <h2>Maiores cheias registradas</h2>
-        </header>
-        <ol class="cheias" id="cheias"></ol>
-      </article>
+      <div class="subsecao" id="bloco-cheias">
+        <h3>As grandes cheias e as pontes</h3>
+        <p class="secao-nota">Cada barra é a altura que o rio atingiu. As linhas verticais são as pontes: a barra que passa da linha cobriu a ponte.</p>
+        <div class="cheias" id="cheias"></div>
+      </div>
     </section>
 
-    <!-- EMERGÊNCIA -->
-    <section id="painel-emergencia" role="tabpanel" aria-labelledby="aba-emergencia" class="painel" hidden>
-      <article class="bloco bloco-urgente">
-        <header class="bloco-topo">
-          <h2>Telefones de emergência</h2>
-          <p class="bloco-nota">Ligação gratuita, atendimento 24 horas.</p>
-        </header>
-        <ul class="telefones">
-          <li><a href="tel:199"><strong>199</strong><span>Defesa Civil</span><small>Alagamentos, deslizamentos, pedidos de socorro</small></a></li>
-          <li><a href="tel:193"><strong>193</strong><span>Bombeiros</span><small>Resgate e evacuação de áreas alagadas</small></a></li>
-          <li><a href="tel:192"><strong>192</strong><span>SAMU</span><small>Urgências médicas</small></a></li>
-          <li><a href="tel:190"><strong>190</strong><span>Polícia Militar</span><small>Segurança e trânsito em áreas evacuadas</small></a></li>
-        </ul>
-      </article>
+    <!-- 4. SE A ÁGUA SUBIR -->
+    <section id="emergencia" class="secao" aria-labelledby="t-emergencia">
+      <h2 id="t-emergencia">Se a água subir</h2>
+      <ul class="telefones">
+        <li><a href="tel:199"><b>199</b><span>Defesa Civil</span></a></li>
+        <li><a href="tel:193"><b>193</b><span>Bombeiros</span></a></li>
+        <li><a href="tel:192"><b>192</b><span>SAMU</span></a></li>
+        <li><a href="tel:190"><b>190</b><span>Polícia Militar</span></a></li>
+      </ul>
 
-      <article class="bloco" id="bloco-orgaos" hidden>
-        <header class="bloco-topo"><h2>Defesa Civil municipal</h2></header>
+      <div class="subsecao" id="bloco-orgaos" hidden>
+        <h3>Plantões da prefeitura</h3>
         <ul class="orgaos" id="orgaos"></ul>
-      </article>
+      </div>
 
-      <article class="bloco" id="bloco-abrigos" hidden>
-        <header class="bloco-topo"><h2>Abrigos</h2></header>
+      <div class="subsecao" id="bloco-abrigos" hidden>
+        <h3>Abrigos</h3>
         <div class="abrigos" id="abrigos"></div>
-      </article>
+      </div>
 
-      <article class="bloco">
-        <header class="bloco-topo">
-          <h2>Mochila de emergência</h2>
-          <p class="bloco-nota">Deixe pronta se você mora em área que alaga.</p>
-        </header>
-        <ul class="checklist">
-          <li>Documentos e cartão do SUS em saco plástico fechado</li>
-          <li>Remédios de uso contínuo para 7 dias e as receitas</li>
-          <li>Água e comida que não estraga</li>
-          <li>Lanterna, pilhas, carregador e bateria extra para o celular</li>
-          <li>Roupa seca, agasalho, cobertor e calçado fechado</li>
-          <li>Itens de higiene pessoal</li>
-          <li>Coleira, ração e remédios dos animais</li>
-        </ul>
-      </article>
-
-      <article class="bloco">
-        <header class="bloco-topo"><h2>Se a água estiver chegando</h2></header>
-        <ol class="passos">
-          <li><strong>Antes</strong>Desligue a chave geral de energia e feche o gás. Suba móveis e eletrodomésticos.</li>
-          <li><strong>Durante</strong>Não atravesse rua alagada, nem a pé nem de carro. Siga a Defesa Civil e vá para um abrigo.</li>
-          <li><strong>Depois</strong>Só volte quando liberarem. Lave e desinfete com água sanitária tudo que teve contato com a água.</li>
-        </ol>
-      </article>
+      <div class="subsecao plano" id="plano">
+        <div class="subsecao-topo">
+          <h3>Plano da família</h3>
+          <button type="button" class="botao" id="imprimir-plano">Imprimir o plano</button>
+        </div>
+        <p class="secao-nota">Preencha à mão, cole na geladeira e combine com quem mora com você. Vale mais que qualquer site na hora da pressa.</p>
+        <div id="plano-conteudo"></div>
+        <p class="secao-nota" id="orientacoes"></p>
+      </div>
     </section>
   </main>
 
