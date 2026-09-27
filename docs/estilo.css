@@ -196,20 +196,36 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 20px 48px; }
 .marco-proximo { font-size: 0.85rem; margin-top: 4px; }
 
 /* ---------- próximos dias: linha do tempo de impactos ---------- */
-.impactos-escala { position: relative; height: 22px; margin: 18px 0 0; }
-.impactos-escala span { position: absolute; transform: translateX(-50%); white-space: nowrap; font: 700 0.8rem var(--fonte-numero); color: var(--tinta-fraca); bottom: 2px; }
-.impactos { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--tinta); }
-.impacto { display: grid; grid-template-columns: 92px 104px minmax(160px, 1fr) minmax(220px, 1.1fr); gap: 16px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--linha); }
+.legenda { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 12px 0 0; font-size: 0.9rem; color: var(--tinta-suave); }
+.legenda span { display: inline-flex; align-items: center; gap: 8px; }
+.legenda i { display: inline-block; flex: none; }
+.leg-faixa { width: 34px; height: 14px; background: var(--agua-forte); }
+.leg-media { width: 4px; height: 20px; background: var(--tinta); }
+.impactos { list-style: none; margin: 16px 0 0; padding: 0; border-top: 2px solid var(--tinta); }
+.impacto { display: grid; grid-template-columns: 92px 112px minmax(160px, 1fr) minmax(220px, 1.1fr); gap: 16px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--linha); }
+.impacto-cabeca { padding: 8px 0 4px; font-size: 0.8rem; font-weight: 700; color: var(--tinta-fraca); align-items: end; }
+.impactos-escala { position: relative; height: 40px; }
+.zonas-nomes, .metros { position: absolute; left: 0; right: 0; }
+.zonas-nomes { top: 0; height: 20px; }
+.metros { bottom: 0; height: 16px; }
+.zona-nome {
+  position: absolute; top: 0; height: 20px; overflow: hidden; white-space: nowrap; text-align: center;
+  font: 800 0.72rem/20px var(--fonte-numero); text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--tinta); background: color-mix(in srgb, var(--cor-status) 30%, transparent);
+}
+.zona-nome[data-status="normal"] { background: transparent; color: var(--tinta-fraca); }
+.zona-nome.apertado { font-size: 0.62rem; letter-spacing: 0; }
+.zona-nome.sem-texto { color: transparent; }
+.metros span { position: absolute; transform: translateX(-50%); white-space: nowrap; font: 700 0.75rem var(--fonte-numero); color: var(--tinta-fraca); }
 .impacto-dia { font: 800 1.25rem/1 var(--fonte-numero); }
 .impacto-dia small { display: block; font: 400 0.8rem var(--fonte); color: var(--tinta-fraca); margin-top: 3px; }
-.impacto-chuva { font: 700 1.1rem/1.1 var(--fonte-numero); color: var(--agua); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.impacto-chuva { font: 700 1.1rem/1.1 var(--fonte-numero); color: var(--agua); display: flex; align-items: center; gap: 6px; }
 .impacto-chuva svg { width: 22px; height: 22px; flex: none; }
-.impacto-chuva small { display: block; font: 400 0.75rem var(--fonte); color: var(--tinta-fraca); }
-.alcance { position: relative; height: 34px; background: var(--papel); border: 1px solid var(--linha); }
-.alcance .faixa-prov { position: absolute; top: 6px; bottom: 6px; background: var(--agua-forte); }
-.alcance .media { position: absolute; top: 2px; bottom: 2px; width: 3px; margin-left: -1.5px; background: var(--tinta); }
-.alcance .agora { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px dotted var(--tinta-suave); }
-.alcance .marca-cota { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; opacity: 0.9; }
+.impacto-chuva small { display: block; font: 400 0.78rem/1.2 var(--fonte); color: var(--tinta-suave); }
+.alcance { position: relative; height: 34px; background-color: var(--papel); border: 1px solid var(--linha); }
+.alcance .faixa-prov { position: absolute; top: 7px; bottom: 7px; background: var(--agua-forte); border: 1.5px solid var(--agua); }
+.alcance .media { position: absolute; top: 1px; bottom: 1px; width: 4px; margin-left: -2px; background: var(--tinta); }
+.impacto-texto .entre { display: block; font-size: 0.82rem; color: var(--tinta-fraca); margin-top: 2px; }
 .impacto-texto { font-size: 0.95rem; }
 .impacto-texto strong { font-weight: 700; }
 .impacto-texto .nivel { font: 800 1.15rem var(--fonte-numero); margin-right: 6px; }
@@ -319,8 +335,8 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 20px 48px; }
   .boletim-grade { grid-template-columns: 1fr; gap: 28px; }
   .coluna-leitura { position: static; }
   .extremos { grid-template-columns: 1fr; }
-  .impacto { grid-template-columns: 74px 84px 1fr; gap: 10px; }
-  .impacto-chuva { white-space: normal; }
+  .impacto { grid-template-columns: 74px 88px 1fr; gap: 10px; }
+  .impacto-cabeca .so-largo { display: none; }
   .impacto-texto { grid-column: 1 / -1; }
   .telefones { grid-template-columns: 1fr 1fr; }
   .telefones li:nth-child(3) { border-left: 0; }
@@ -328,6 +344,11 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 20px 48px; }
 }
 @media (max-width: 560px) {
   body { font-size: 16px; }
+  /* no celular: dia e chuva numa linha, barra na largura toda, texto embaixo */
+  .impacto { grid-template-columns: auto 1fr; gap: 8px 16px; }
+  .impacto-cabeca > span { display: none; }
+  .impactos-escala, .alcance, .impacto-texto { grid-column: 1 / -1; }
+  .impacto-chuva small { display: inline; margin-left: 4px; }
   .tarja-linha { padding: 8px 12px; }
   .marca small { display: none; }
   .marca strong { font-size: 1.2rem; }
