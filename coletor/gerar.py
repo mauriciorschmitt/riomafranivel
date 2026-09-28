@@ -150,6 +150,8 @@ def main(argv=None) -> int:
     grupo.add_argument("--todas", action="store_true")
     args = parser.parse_args(argv)
     cidades = base.listar_cidades() if args.todas else [args.cidade]
+    if base.carimbar_versao():
+        print("[ok] versão do estilo/código atualizada no index.html")
     falhas = 0
     for slug in cidades:
         try:
