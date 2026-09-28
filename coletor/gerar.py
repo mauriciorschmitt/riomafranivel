@@ -107,6 +107,12 @@ def gerar_cidade(slug: str) -> dict:
         previsao = PREVISAO_VAZIA
     chuva = atualizar_chuva(slug, previsao, agora.date())
 
+    conjunto = None
+    try:
+        conjunto = openmeteo.chuva_conjunto(config["bacia"]["pontos"]) or None
+    except (RuntimeError, KeyError, ValueError) as erro:
+        avisos.append(f"Previsão de chuva por conjunto indisponível ({erro}); a chance usa só a previsão principal.")
+
     glofas = None
     try:
         glofas = openmeteo.vazao_glofas(config["estacao"]["lat"], config["estacao"]["lon"])
@@ -126,6 +132,7 @@ def gerar_cidade(slug: str) -> dict:
         "previsao": previsao,
         "chuva_historica": chuva,
         "glofas": glofas,
+        "chuva_conjunto": conjunto,
         "previsoes": base.ler_json(base.pasta(slug) / "previsoes.json", {}),
     }
     saida = processar(config, bruto, modelo, base.ler_maximas(slug, config))

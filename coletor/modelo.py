@@ -273,19 +273,27 @@ def _faixa_empirica(pares, chuva_prevista):
     return erros
 
 
+MIN_CENARIOS = 5
+GRADE_NORMAL = np.array([-1.64, -1.28, -0.84, -0.52, -0.25, 0.0, 0.25, 0.52, 0.84, 1.28, 1.64])
+
+
 def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, montante=None,
            cota_inundacao=None, fator_incerteza=1.3, crescimento_diario=0.15, fator_empirico=1.0,
-           cotas_extras=None):
+           cotas_extras=None, cenarios_chuva=None):
     """Previsão dos próximos 7 dias a partir do nível atual.
 
-    Faixa de 80% (do 10º ao 90º percentil):
-    * modelo calibrado: vem dos erros reais do teste retroativo, escolhendo as
-      situações com chuva acumulada mais parecida com a prevista. A faixa sai
-      assimétrica, como os erros reais (o modelo tende a subestimar subidas
-      depois de chuva forte, então a faixa se abre mais para cima).
-    * modelo heurístico: curva normal com desvio genérico, que cresce
-      `crescimento_diario` a cada dia à frente.
-    As larguras nunca diminuem com o horizonte.
+    A linha central ("media") usa a previsão de chuva principal. A faixa de 80%
+    (10º a 90º percentil) e as chances juntam duas incertezas:
+
+    * a da chuva: com `cenarios_chuva` (as versões da previsão por conjunto), o
+      modelo roda uma vez para cada versão. Uma chuva forte que só aparece em
+      parte das versões pesa só nessa parte;
+    * a do próprio modelo: os erros reais do teste retroativo, escolhidos entre
+      as situações com chuva parecida com a de cada versão (modelo calibrado),
+      ou uma curva normal genérica (modelo heurístico).
+
+    Sem cenários, a chuva prevista é tratada como certa (comportamento antigo).
+    As margens da faixa nunca diminuem com o horizonte.
     """
     niveis = {_d(k): v for k, v in niveis_diarios.items() if v is not None}
     niveis[hoje] = nivel_atual
@@ -299,32 +307,45 @@ def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, mon
     validacao = modelo.get("erros_validacao") or []
     empirico = len(validacao) == HORIZONTE and all(len(p) >= MIN_ANALOGOS for p in validacao)
 
+    # versões da chuva: o passado e hoje ficam como estão; só os dias futuros mudam
+    chuvas = [chuva]
+    if cenarios_chuva and len(cenarios_chuva) >= MIN_CENARIOS:
+        chuvas = []
+        for cenario in cenarios_chuva:
+            c = dict(chuva)
+            c.update({_d(k): v for k, v in cenario.items() if v is not None and _d(k) > hoje})
+            chuvas.append(c)
+    usa_cenarios = len(chuvas) > 1
+    medias_cenario = [simular(modelo, hoje, niveis, c, montante, atraso) for c in chuvas] if usa_cenarios else [medias]
+
     saida, abaixo_max, acima_max = [], 0.0, 0.0
     for k, media in enumerate(medias):
         item = {"data": (hoje + dt.timedelta(days=k + 1)).isoformat(), "media": round(media, 2)}
         if empirico:
-            erros = _faixa_empirica(validacao[k], chuva_acumulada(chuva, hoje, k)) * fator_empirico
-            abaixo = max(0.0, float(np.quantile(erros, 0.9)))   # observado = previsto - erro
-            acima = max(0.0, -float(np.quantile(erros, 0.1)))
-            prob = float(np.mean(media - erros >= cota_inundacao)) if cota_inundacao is not None else None
-            desvio = float(np.sqrt(np.mean(erros**2)))
-            chance = lambda c: float(np.mean(media - erros >= c))  # noqa: E731
+            amostras = np.concatenate([
+                mc[k] - _faixa_empirica(validacao[k], chuva_acumulada(c, hoje, k)) * fator_empirico
+                for c, mc in zip(chuvas, medias_cenario)
+            ])
         else:
-            desvio = modelo["rmse_horizonte"][k] * fator_incerteza * (1 + crescimento_diario * k)
-            abaixo = acima = 1.28 * desvio
-            prob = _normal_acima(cota_inundacao, media, desvio) if cota_inundacao is not None else None
-            chance = lambda c, m=media, d=desvio: _normal_acima(c, m, d)  # noqa: E731
+            desvio_h = modelo["rmse_horizonte"][k] * fator_incerteza * (1 + crescimento_diario * k)
+            amostras = np.concatenate([mc[k] + desvio_h * GRADE_NORMAL for mc in medias_cenario])
+        amostras = np.maximum(amostras, piso)
+        abaixo = max(0.0, media - float(np.quantile(amostras, 0.1)))
+        acima = max(0.0, float(np.quantile(amostras, 0.9)) - media)
         abaixo_max, acima_max = max(abaixo_max, abaixo), max(acima_max, acima)
+        chance = lambda c, a=amostras: float(np.mean(a >= c))  # noqa: E731
         item.update({
             "min": round(max(piso, media - abaixo_max), 2),
             "max": round(media + acima_max, 2),
-            "desvio": round(desvio, 3),
+            "desvio": round(float(np.std(amostras)), 3),
         })
-        if prob is not None:
-            item["prob_inundacao"] = round(prob, 3)
+        if cota_inundacao is not None:
+            item["prob_inundacao"] = round(chance(cota_inundacao), 3)
         if cotas_extras:
             # chance de passar de cada marco da régua / local cadastrado, para a linha do tempo
             item["prob_cotas"] = {f"{c:.2f}": round(chance(c), 3) for c in cotas_extras}
+        if usa_cenarios:
+            item["cenarios"] = len(chuvas)
         saida.append(item)
     return saida
 

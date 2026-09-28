@@ -18,6 +18,8 @@ import requests
 PREVISAO = "https://api.open-meteo.com/v1/forecast"
 ARQUIVO = "https://archive-api.open-meteo.com/v1/archive"
 CHEIAS = "https://flood-api.open-meteo.com/v1/flood"
+CONJUNTO = "https://ensemble-api.open-meteo.com/v1/ensemble"
+MODELO_CONJUNTO = "ecmwf_ifs025"  # previsão por conjunto do ECMWF: 51 versões da chuva
 FUSO = "America/Sao_Paulo"
 TIMEOUT = 60
 
@@ -157,3 +159,52 @@ def chuva_historica_bacia(pontos: list[dict], inicio: dt.date, fim: dt.date) -> 
         for p in pontos
     ]
     return _media_ponderada(series)
+
+
+def _membros_diarios(resposta: dict) -> list[dict[str, float]]:
+    """Separa cada versão (membro) da previsão de chuva e soma por dia.
+
+    O nome das colunas varia (precipitation, precipitation_member01...), então
+    toda coluna que começa com "precipitation" vira um membro.
+    """
+    horas = resposta["hourly"]["time"]
+    membros = []
+    for chave, valores in resposta["hourly"].items():
+        if not chave.startswith("precipitation"):
+            continue
+        dia: dict[str, float] = {}
+        for h, v in zip(horas, valores):
+            if v is not None:
+                dia[h[:10]] = dia.get(h[:10], 0.0) + v
+        if dia:
+            membros.append(dia)
+    return membros
+
+
+def chuva_conjunto(pontos: list[dict]) -> list[dict[str, float]]:
+    """Versões da previsão de chuva da bacia (média ponderada dos pontos), por dia.
+
+    Devolve uma lista de cenários {data: mm}. Serve para a chance de inundação
+    levar em conta que a chuva prevista pode não se confirmar.
+    """
+    por_ponto = []
+    for p in pontos:
+        resposta = _get(
+            CONJUNTO,
+            {
+                "latitude": p["lat"],
+                "longitude": p["lon"],
+                "timezone": FUSO,
+                "hourly": "precipitation",
+                "models": MODELO_CONJUNTO,
+                "forecast_days": 8,
+            },
+        )
+        por_ponto.append((float(p.get("peso", 1.0)), _membros_diarios(resposta)))
+    n = min(len(m) for _, m in por_ponto)
+    if n == 0:
+        return []
+    cenarios = []
+    for i in range(n):
+        cenarios.append(_media_ponderada([(peso, membros[i]) for peso, membros in por_ponto]))
+    return cenarios

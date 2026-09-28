@@ -192,6 +192,7 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
             | {float(x["cota"]) for x in config.get("locais", []) if "cota" in x}
             | {float(f["cota"]) for f in config["cotas"]["faixas"]}
         ),
+        cenarios_chuva=bruto.get("chuva_conjunto"),
     )
     horaria = mod.projecao_horaria(ultima["hora"], ultima["nivel"], tendencia or 0.0, diaria, horas=48)
 
@@ -289,6 +290,7 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
             [d.isoformat(), round(v, 2)] for d, v in medias_diarias.items() if d >= hoje - dt.timedelta(days=30)
         ],
         "placar": placar(bruto.get("previsoes") or {}, medias_diarias, hoje),
+        "cenarios_chuva": diaria[0].get("cenarios") if diaria else None,
         "chuva_diaria": chuva_diaria,
         "previsao_horaria": horaria,
         "previsao_dias": dias_previsao,
