@@ -111,6 +111,22 @@
         </div>
       </div>
 
+      <div class="subsecao" id="bloco-tempo">
+        <div class="subsecao-topo">
+          <h3>O tempo na bacia agora</h3>
+          <div class="segmentado" role="group" aria-label="Camada do mapa" id="camada-tempo">
+            <button type="button" data-camada="radar" aria-pressed="true">Chuva agora</button>
+            <button type="button" data-camada="satellite" aria-pressed="false">Satélite</button>
+            <button type="button" data-camada="rain" aria-pressed="false">Chuva prevista</button>
+          </div>
+        </div>
+        <p class="secao-nota" id="tempo-nota"></p>
+        <div class="mapa-tempo">
+          <iframe id="mapa-tempo" title="Mapa do tempo na bacia do rio" loading="lazy" allowfullscreen></iframe>
+        </div>
+        <p class="credito">Mapa: <a href="https://www.windy.com" target="_blank" rel="noopener">Windy.com</a>, com radares, satélite e modelos meteorológicos. Toque no mapa para ver a previsão de um ponto.</p>
+      </div>
+
       <div class="subsecao">
         <h3>Por que essa previsão</h3>
         <p class="porque" id="porque"></p>
