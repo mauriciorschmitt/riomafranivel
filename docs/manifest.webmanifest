@@ -1,0 +1,16 @@
+{
+  "name": "Régua Viva: nível do rio e previsão",
+  "short_name": "Régua Viva",
+  "description": "Nível do rio agora, o que deve acontecer nos próximos dias e o que fazer se a água subir.",
+  "lang": "pt-BR",
+  "start_url": "./?origem=app",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#121A1E",
+  "theme_color": "#121A1E",
+  "icons": [
+    { "src": "icones/icone-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icones/icone-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icones/icone-mascara-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

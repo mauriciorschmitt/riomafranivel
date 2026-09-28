@@ -1119,7 +1119,45 @@
     $$("main > section").forEach((p) => (p.hidden = true));
   }
 
+  // ------------------------------------------------------------ app instalável
+  function prepararApp() {
+    if ("serviceWorker" in navigator && location.protocol !== "file:") {
+      navigator.serviceWorker.register("sw.js").catch(() => { /* sem app, o site continua funcionando */ });
+    }
+    const aviso = $("#offline-aviso");
+    const atualizarAviso = () => { aviso.hidden = navigator.onLine !== false; };
+    window.addEventListener("online", atualizarAviso);
+    window.addEventListener("offline", atualizarAviso);
+    atualizarAviso();
+
+    const instalado = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    if (instalado) return;
+    const botao = $("#instalar");
+    let pedido = null;
+    // Android e computador: o navegador avisa quando dá para instalar
+    window.addEventListener("beforeinstallprompt", (ev) => {
+      ev.preventDefault();
+      pedido = ev;
+      botao.hidden = false;
+    });
+    botao.addEventListener("click", async () => {
+      if (pedido) {
+        pedido.prompt();
+        await pedido.userChoice.catch(() => null);
+        pedido = null;
+        botao.hidden = true;
+      } else {
+        $("#dica-instalar").hidden = false;
+      }
+    });
+    // iPhone: não há aviso automático; o botão mostra como fazer
+    const iphone = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    if (iphone) botao.hidden = false;
+    window.addEventListener("appinstalled", () => { botao.hidden = true; $("#dica-instalar").hidden = true; });
+  }
+
   async function iniciar() {
+    prepararApp();
     try {
       D = await carregar();
     } catch (e) {

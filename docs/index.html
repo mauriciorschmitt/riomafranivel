@@ -6,13 +6,20 @@
   <title>Régua Viva</title>
   <meta name="description" content="Nível do rio agora, o que deve acontecer nos próximos dias e o que fazer se a água subir.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='10' y='2' width='12' height='28' fill='white' stroke='%23121A1E' stroke-width='2'/><path d='M11 6h6M11 10h4M11 14h6' stroke='%23121A1E' stroke-width='2'/><rect x='11' y='18' width='10' height='11' fill='%231C6E8C'/></svg>">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#121A1E">
+  <link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Régua Viva">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="estilo.css?v=81b30e2f">
+  <link rel="stylesheet" href="estilo.css?v=b4cebccc">
 </head>
 <body>
   <div id="demo-aviso" class="demo-aviso" hidden>Demonstração com dados fictícios. Não use para decisões reais.</div>
+  <div id="offline-aviso" class="offline-aviso" hidden>Sem internet: mostrando o último boletim guardado neste aparelho.</div>
 
   <header class="tarja" id="tarja">
     <div class="tarja-linha">
@@ -65,7 +72,9 @@
             <button type="button" class="botao botao-forte" id="boletim-imagem">Mandar boletim no WhatsApp</button>
             <button type="button" class="botao" id="compartilhar">Copiar texto do boletim</button>
             <a class="botao" id="link-alertas" hidden target="_blank" rel="noopener">Receber alertas no Telegram</a>
+            <button type="button" class="botao" id="instalar" hidden>Instalar no celular</button>
           </div>
+          <p class="dica-instalar" id="dica-instalar" hidden>No iPhone: toque em <strong>Compartilhar</strong> (o quadrado com a seta, embaixo) e depois em <strong>Adicionar à Tela de Início</strong>.</p>
         </div>
 
         <figure class="regua-bloco">
@@ -228,6 +237,6 @@
   <footer class="rodape" id="rodape"></footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
-  <script src="app.js?v=50193aac"></script>
+  <script src="app.js?v=8e1f561f"></script>
 </body>
 </html>

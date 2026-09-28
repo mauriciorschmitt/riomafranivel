@@ -75,6 +75,9 @@ a { color: var(--agua); }
   color: #fff; text-align: center; font-weight: 700; padding: 6px 12px; text-shadow: 0 1px 2px #000;
 }
 
+.offline-aviso { background: #F2C200; color: #121A1E; text-align: center; font-weight: 700; padding: 6px 12px; }
+.dica-instalar { font-size: 0.92rem; border-left: 4px solid var(--agua); padding: 4px 0 4px 10px; }
+
 /* ---------- tarja (cabeçalho fixo) ---------- */
 .tarja { position: sticky; top: 0; z-index: 10; background: var(--tarja); color: var(--tarja-texto); padding-top: env(safe-area-inset-top, 0px); }
 .tarja-linha { max-width: 1180px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
