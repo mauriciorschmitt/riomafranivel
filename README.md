@@ -99,6 +99,10 @@ Cada arquivo em `config/cidades/` vira uma cidade no mesmo site, com um seletor 
 
 Os níveis de impacto, pontes e cheias de Rio Negro/Mafra no exemplo vieram de um painel de terceiros e **precisam ser conferidos com a Defesa Civil** antes de o site ir ao ar. Os contatos municipais estão em branco de propósito.
 
+## App no celular
+
+O site é um aplicativo da web instalável (PWA). No Android, o Chrome oferece "Instalar aplicativo" e o botão "Instalar no celular" aparece no boletim; no iPhone, pelo Safari, em Compartilhar > Adicionar à Tela de Início. O app abre em tela cheia, atualiza sozinho a cada coleta e, sem internet, mostra o último boletim guardado com um aviso. Os arquivos são `docs/manifest.webmanifest`, `docs/sw.js` e `docs/icones/`.
+
 ## Estações da COPEL
 
 Na bacia do Iguaçu (que inclui o Rio Negro), a COPEL publica estações horárias em https://www.copel.com/mhbweb/paginas/bacia-iguacu.jsf. Algumas, como Fragosos, não aparecem na ANA. Para ver os nomes disponíveis: `python -m coletor.copel`; para as últimas leituras de uma: `python -m coletor.copel Fragosos`.
