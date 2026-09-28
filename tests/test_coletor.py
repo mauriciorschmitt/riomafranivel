@@ -404,3 +404,16 @@ def test_chuva_incerta_diminui_a_certeza():
     assert incerta[4]["prob_inundacao"] < certa[4]["prob_inundacao"]
     assert incerta[4]["min"] < certa[4]["min"]           # a faixa passa a incluir "a chuva não veio"
     assert incerta[4]["media"] == certa[4]["media"]      # a linha central segue a previsão principal
+
+
+def test_carimbo_de_versao_no_index(tmp_path, monkeypatch):
+    monkeypatch.setattr(base, "PASTA_SITE", tmp_path)
+    (tmp_path / "index.html").write_text('<link href="estilo.css" rel="stylesheet"><script src="app.js?v=0000"></script>', encoding="utf-8")
+    (tmp_path / "estilo.css").write_text("body{}", encoding="utf-8")
+    (tmp_path / "app.js").write_text("console.log(1)", encoding="utf-8")
+    assert base.carimbar_versao() is True
+    html = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert 'href="estilo.css?v=' in html and 'src="app.js?v=' in html and "v=0000" not in html
+    assert base.carimbar_versao() is False            # nada mudou: não mexe
+    (tmp_path / "app.js").write_text("console.log(2)", encoding="utf-8")
+    assert base.carimbar_versao() is True             # código novo: versão nova
