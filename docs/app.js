@@ -709,6 +709,30 @@
       : `Quando o rio sobe em ${m.nome}, a subida chega aqui depois. Por enquanto é só informação: a estação entra no cálculo da previsão quando houver histórico suficiente (cerca de 90 dias de dados).`;
   }
 
+  // ------------------------------------------------------------ mapa do tempo (Windy)
+  const CAMADAS_TEMPO = {
+    radar: { nota: "Onde está chovendo agora, pelos radares meteorológicos. As manchas amarelas e vermelhas são chuva forte. Em algumas áreas do interior a cobertura dos radares tem falhas.", zoom: 8 },
+    satellite: { nota: "As nuvens vistas do satélite. As mais brancas e brilhantes costumam ser nuvens de tempestade; dá para ver quando elas estão vindo na direção da bacia.", zoom: 7 },
+    rain: { nota: "Chuva prevista para as próximas horas pelo modelo europeu (ECMWF), a mesma base usada na previsão do rio. Use a linha do tempo do mapa para avançar as horas.", zoom: 8 },
+  };
+  let camadaTempo = "radar";
+  function renderTempo(camada = camadaTempo) {
+    camadaTempo = camada;
+    const c = D.config.estacao;
+    const info = CAMADAS_TEMPO[camada] || CAMADAS_TEMPO.radar;
+    const params = new URLSearchParams({
+      lat: c.lat, lon: c.lon, detailLat: c.lat, detailLon: c.lon, zoom: info.zoom,
+      level: "surface", overlay: camada, product: "ecmwf", menu: "", message: "true", marker: "true",
+      calendar: "now", pressure: "", type: "map", location: "coordinates", detail: "",
+      metricWind: "km/h", metricTemp: "°C", metricRain: "mm", radarRange: "-1",
+    });
+    const url = `https://embed.windy.com/embed2.html?${params}`;
+    const quadro = $("#mapa-tempo");
+    if (quadro.getAttribute("src") !== url) quadro.setAttribute("src", url);
+    $("#tempo-nota").textContent = info.nota;
+    $$("#camada-tempo button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.camada === camada));
+  }
+
   // ------------------------------------------------------------ gráfico com alternância
   let graficoAtivo = "7d";
   function mostrarGrafico(qual) {
@@ -1042,6 +1066,7 @@
     renderImpactos();
     renderRioAcima();
     mostrarGrafico(graficoAtivo);
+    renderTempo();
     renderPorque();
     renderPlacar();
     renderHistorico();
@@ -1056,6 +1081,7 @@
       if (typeof Chart !== "undefined") graficoHistorico();
     }));
     $$("#alterna-grafico button").forEach((b) => b.addEventListener("click", () => mostrarGrafico(b.dataset.grafico)));
+    $$("#camada-tempo button").forEach((b) => b.addEventListener("click", () => renderTempo(b.dataset.camada)));
     $("#mostrar-pontes").addEventListener("change", () => { if (typeof Chart !== "undefined") graficoHistorico(); });
     $("#compartilhar").addEventListener("click", compartilhar);
     $("#boletim-imagem").addEventListener("click", boletimImagem);
