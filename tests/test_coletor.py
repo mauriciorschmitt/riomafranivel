@@ -371,3 +371,36 @@ def test_chance_por_marco_da_regua():
     cotas = sorted(probs, key=float)
     assert all(probs[a] >= probs[b] for a, b in zip(cotas, cotas[1:]))  # quanto mais alto, menos provável
     assert abs(probs["7.00"] - dia["prob_inundacao"]) < 1e-9
+
+
+def test_le_as_versoes_da_chuva_do_conjunto():
+    from coletor import openmeteo
+    resposta = {"hourly": {
+        "time": ["2026-10-01T00:00", "2026-10-01T12:00", "2026-10-02T00:00"],
+        "precipitation": [1.0, 2.0, 0.0],
+        "precipitation_member01": [10.0, 5.0, None],
+        "precipitation_member02": [0.0, 0.0, 3.0],
+        "temperature_2m": [20, 21, 19],
+    }}
+    membros = openmeteo._membros_diarios(resposta)
+    assert len(membros) == 3
+    assert membros[1] == {"2026-10-01": 15.0}
+    assert membros[2] == {"2026-10-01": 0.0, "2026-10-02": 3.0}
+
+
+def test_chuva_incerta_diminui_a_certeza():
+    cfg, agora, bruto, maximas, treino = _dados_demo()
+    modelo = mod.treinar(treino["niveis"], treino["chuva"])
+    hoje = agora.date()
+    chuva = dict(treino["chuva"])
+    for k in range(1, 5):
+        chuva[(hoje + dt.timedelta(days=k)).isoformat()] = 60.0   # previsão principal: muita chuva
+    cota = 6.0
+    certa = mod.prever(modelo, hoje, 5.0, treino["niveis"], chuva, cota_inundacao=cota)
+    # metade das versões com a chuva, metade sem chuva nenhuma
+    cenarios = [{(hoje + dt.timedelta(days=k)).isoformat(): (60.0 if i % 2 else 0.0) for k in range(1, 8)} for i in range(20)]
+    incerta = mod.prever(modelo, hoje, 5.0, treino["niveis"], chuva, cota_inundacao=cota, cenarios_chuva=cenarios)
+    assert incerta[4]["cenarios"] == 20
+    assert incerta[4]["prob_inundacao"] < certa[4]["prob_inundacao"]
+    assert incerta[4]["min"] < certa[4]["min"]           # a faixa passa a incluir "a chuva não veio"
+    assert incerta[4]["media"] == certa[4]["media"]      # a linha central segue a previsão principal
