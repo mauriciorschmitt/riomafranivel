@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import csv
 import datetime as dt
+import hashlib
 import json
+import re
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -184,3 +186,25 @@ def publicar(slug: str, saida: dict) -> Path:
     outras.append({"slug": slug, "nome": cfg["nome_app"], "local": cfg["local"]})
     salvar_json(indice_caminho, {"cidades": sorted(outras, key=lambda c: c["nome"])})
     return destino
+
+
+def carimbar_versao() -> bool:
+    """Põe no index.html uma "versão" do estilo e do código (ex.: app.js?v=3f9a1c2e).
+
+    Quando esses arquivos mudam, a versão muda e os navegadores baixam o arquivo
+    novo em vez de usar a cópia antiga guardada. Devolve True se o index mudou.
+    """
+    indice = PASTA_SITE / "index.html"
+    if not indice.exists():
+        return False
+    html = original = indice.read_text(encoding="utf-8")
+    for nome in ("estilo.css", "app.js"):
+        arquivo = PASTA_SITE / nome
+        if not arquivo.exists():
+            continue
+        versao = hashlib.sha1(arquivo.read_bytes()).hexdigest()[:8]
+        html = re.sub(r'(["\'])' + re.escape(nome) + r'(\?v=[0-9a-f]*)?(["\'])', r"\g<1>" + f"{nome}?v={versao}" + r"\g<3>", html)
+    if html != original:
+        indice.write_text(html, encoding="utf-8")
+        return True
+    return False
