@@ -144,13 +144,14 @@
     const titulo = acima ? `O ${c.rio} está acima da cota de inundação e ${estado}.` : `O ${c.rio} está ${estado}.`;
     const dias = D.previsao_dias.slice(1);
     const maior = (arr) => arr.reduce((a, b) => ((b.prob_inundacao ?? 0) > (a.prob_inundacao ?? 0) ? b : a), arr[0]);
+    // porcentagem só até 3 dias à frente; depois disso a chuva prevista erra demais
     const perto = maior(dias.slice(0, 3)), longe = maior(dias.slice(3));
-    const maxGeral = Math.max(...dias.map((d) => d.prob_inundacao ?? 0));
+    const pPerto = perto?.prob_inundacao ?? 0, pLonge = longe?.prob_inundacao ?? 0;
     let sub;
     if (acima) sub = "Quem mora em área de risco deve seguir as orientações da Defesa Civil: <strong>199</strong>.";
-    else if ((perto?.prob_inundacao ?? 0) >= 0.2) sub = `<strong>Pode passar da cota de inundação (${fmt(cota)} m) ${naDia(perto.data)}</strong>: chance de ${pct(perto.prob_inundacao)}.`;
-    else if ((longe?.prob_inundacao ?? 0) >= 0.2) sub = `Sem risco nos próximos 3 dias. Com a chuva prevista, <strong>pode passar de ${fmt(cota)} m ${naDia(longe.data)}</strong>: chance de ${pct(longe.prob_inundacao)}.`;
-    else if (maxGeral >= 0.05) sub = "Risco baixo de inundação nos próximos 7 dias.";
+    else if (pPerto >= 0.2) sub = `<strong>Pode passar da cota de inundação (${fmt(cota)} m) ${naDia(perto.data)}</strong>: chance de ${pct(pPerto)}, contando com a chuva prevista.`;
+    else if (pLonge >= 0.3) sub = `Sem risco nos próximos 3 dias. <strong>Pode subir ${naDia(longe.data)}</strong>, se a chuva prevista se confirmar. A previsão fica mais segura nos próximos dias.`;
+    else if (pPerto >= 0.05 || pLonge >= 0.1) sub = "Risco baixo de inundação nos próximos dias.";
     else sub = "Sem risco de inundação previsto para os próximos 7 dias.";
     return [titulo, sub];
   }
@@ -226,11 +227,15 @@
     const dias = D.previsao_dias.slice(1);
     const melhor = dias.reduce((a, d) => ((d.prob_cotas?.[chave] ?? 0) > (a.prob_cotas?.[chave] ?? 0) ? d : a), dias[0]);
     const p = melhor?.prob_cotas?.[chave];
+    const perto = dias.slice(0, 3).reduce((a, d) => ((d.prob_cotas?.[chave] ?? 0) > (a.prob_cotas?.[chave] ?? 0) ? d : a), dias[0]);
+    const pPerto = perto?.prob_cotas?.[chave] ?? 0;
     let previsao = "";
-    if (p != null && p < 0.01) previsao = " Pela previsão, a água não chega lá nos próximos 7 dias.";
-    else if (p != null) previsao = ` Chance de chegar lá nos próximos 7 dias: <strong>${pct(p)}</strong>, maior ${naDia(melhor.data)}.`;
+    if (p != null && p < 0.05) previsao = " Pela previsão, a água não chega lá nos próximos 7 dias.";
+    else if (pPerto >= 0.05) previsao = ` Chance de chegar lá nos próximos 3 dias: <strong>${pct(pPerto)}</strong>, maior ${naDia(perto.data)}.`;
+    else if (p != null && p >= 0.2) previsao = ` Nos próximos 3 dias, não. Depois, <strong>pode chegar lá se a chuva prevista se confirmar</strong>; a previsão fica mais segura mais perto da data.`;
+    else if (p != null) previsao = " Risco baixo nos próximos 7 dias.";
     el.innerHTML = `<strong>${esc(e.nome)}</strong> começa a ser atingido com ${fmt(e.cota)} m. O rio está <strong>${fmt(e.cota - n)} m abaixo</strong> disso.${previsao}`;
-    if (p != null && p >= 0.2) el.classList.add("perigo");
+    if (pPerto >= 0.2) el.classList.add("perigo");
   }
 
   // ------------------------------------------------------------ régua
@@ -508,8 +513,11 @@
     const riscoMax = futuros.reduce((a, b) => ((b.prob_inundacao ?? 0) > (a.prob_inundacao ?? 0) ? b : a), futuros[0]);
     const cotaInund = inundacao();
     let texto;
-    if ((riscoMax.prob_inundacao ?? 0) >= 0.2) {
-      texto = `Atenção: há ${pct(riscoMax.prob_inundacao)} de chance de o rio passar de ${fmt(cotaInund)} m ${naDia(riscoMax.data)} (${dataCurta(riscoMax.data)}).`;
+    const indiceRisco = futuros.indexOf(riscoMax) + 1; // 1 = amanhã
+    if ((riscoMax.prob_inundacao ?? 0) >= 0.2 && indiceRisco <= 3) {
+      texto = `Atenção: há ${pct(riscoMax.prob_inundacao)} de chance de o rio passar de ${fmt(cotaInund)} m ${naDia(riscoMax.data)} (${dataCurta(riscoMax.data)}), contando com a chuva prevista.`;
+    } else if ((riscoMax.prob_inundacao ?? 0) >= 0.3) {
+      texto = `Com a chuva prevista, o rio pode voltar a subir e chegar perto de ${fmt(cotaInund)} m ${naDia(riscoMax.data)} (${dataCurta(riscoMax.data)}). Como faltam mais de 3 dias, trate como tendência: a previsão de chuva ainda pode mudar bastante.`;
     } else if (pico.media > agora + 0.15) {
       texto = `Com a chuva prevista, o rio deve voltar a subir e chegar perto de ${fmt(pico.media)} m ${naDia(pico.data)} (${dataCurta(pico.data)}), abaixo da cota de inundação.`;
     } else {
@@ -549,17 +557,24 @@
       return { risco: statusDe(n).id, texto: `<span class="nivel">${fmt(n)} m</span> agora, ${estadoRio()}.${marco ? ` Marco atual: ${esc(marco.titulo)}.` : ""}` };
     }
     const probs = d.prob_cotas || {};
+    const distante = i >= 4; // 4 dias ou mais: só tendência, sem porcentagem
+    const inicioAlerta = faixas()[0]?.cota ?? 0; // marcos abaixo da 1ª faixa (ex.: leito normal) não são impacto
     const possiveis = marcos
-      .filter((m) => m.cota > n)
+      .filter((m) => m.cota > n && m.cota >= inicioAlerta)
       .map((m) => ({ m, p: probs[Number(m.cota).toFixed(2)] ?? (d.media >= m.cota ? 1 : 0) }))
-      .filter((o) => o.p >= 0.1);
+      // perto: vale mostrar possibilidades a partir de 10%; longe: só o que é provável (tendência)
+      .filter((o) => o.p >= (distante ? 0.4 : 0.1));
     let texto = `<span class="nivel">${fmt(d.media)} m</span>`;
     let risco = "normal";
     const alvo = possiveis.at(-1);
-    if (alvo) {
+    if (alvo && distante) {
+      texto += `Tendência: pode chegar a <strong>${esc(alvo.m.titulo)}</strong> (${fmt(alvo.m.cota)} m), se a chuva prevista se confirmar.`;
+      risco = "atencao";
+    } else if (alvo) {
       texto += `${alvo.p >= 0.5 ? "Deve chegar a" : "Pode chegar a"} <strong>${esc(alvo.m.titulo)}</strong> (${fmt(alvo.m.cota)} m): chance de ${pct(alvo.p)}.`;
+      // cor de alarme só quando a chance é relevante; possibilidade pequena fica só em negrito
       const st = statusDe(alvo.m.cota).id;
-      risco = st === "normal" ? "atencao" : st;
+      risco = alvo.p < 0.3 ? "baixo" : st === "normal" ? "atencao" : st;
     } else {
       const atual = marcos.filter((m) => m.cota <= n).at(-1);
       texto += atual && d.max < atual.cota
@@ -655,7 +670,7 @@
 
     const m = D.modelo;
     $("#nota-modelo").innerHTML = m.tipo === "calibrado"
-      ? `<strong>Como a previsão é feita.</strong> Um modelo estatístico aprendeu, com ${m.n_dias} dias de dados desta estação, como o rio responde à chuva na bacia. Ele é retreinado toda semana. A faixa de cada dia mostra onde o nível deve ficar em 8 de cada 10 casos e se abre mais para cima porque, nos testes, o modelo tende a subestimar subidas fortes. É uma estimativa, não uma certeza: siga sempre a Defesa Civil.`
+      ? `<strong>Como a previsão é feita.</strong> Um modelo estatístico aprendeu, com ${m.n_dias} dias de dados desta estação, como o rio responde à chuva na bacia. Ele é retreinado toda semana. ${D.cenarios_chuva ? `A faixa e as chances levam em conta ${D.cenarios_chuva} versões da previsão de chuva (conjunto do centro europeu ECMWF): se a chuva forte aparece só em parte delas, a chance fica menor.` : "Nesta atualização a previsão de chuva por conjunto não estava disponível, então as chances tratam a chuva prevista como certa e podem estar altas demais."} Porcentagens aparecem só até 3 dias à frente; depois disso o site mostra só a tendência. É uma estimativa, não uma certeza: siga sempre a Defesa Civil.`
       : `<strong>Previsão ainda não calibrada para esta estação</strong> (${esc(m.motivo || "sem histórico suficiente")}). Os valores usam coeficientes genéricos e podem errar bastante.`;
     $("#glofas").innerHTML = f.glofas
       ? `<strong>Vazão prevista pelo sistema europeu GloFAS:</strong> pico de ${fmt(f.glofas.pico_m3s, 0)} m³/s em ${dataCurta(f.glofas.data)}. É um modelo global de baixa resolução, mostrado só como referência; ele não entra na previsão acima.`
