@@ -158,6 +158,15 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
         if data >= (hoje - dt.timedelta(days=5)).isoformat() or data not in chuva_bacia:
             chuva_bacia[data] = dia["chuva_mm"]
 
+    # versões da chuva: a chuva mostrada e usada nos próximos dias é a mediana delas,
+    # que muda pouco de uma rodada para outra (a previsão "principal" oscila bastante)
+    conjunto = bruto.get("chuva_conjunto") or []
+    chuva_mediana: dict[str, float] = {}
+    if len(conjunto) >= mod.MIN_CENARIOS:
+        futuras = sorted({d for c in conjunto for d in c if d > hoje.isoformat()})
+        chuva_mediana = {d: round(statistics.median(c.get(d, 0.0) for c in conjunto), 1) for d in futuras}
+        chuva_bacia.update(chuva_mediana)
+
     # montante (rio acima)
     montante_cfg = next((m for m in config.get("montante", []) if base.chave_montante(m)), None)
     montante_diario, montante_info = {}, None
@@ -201,6 +210,11 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
         data = (hoje + dt.timedelta(days=i)).isoformat()
         tempo = previsao["diario"].get(data, {})
         item = {"data": data, **{k: tempo.get(k) for k in ("chuva_mm", "prob", "tmax", "tmin", "codigo")}}
+        if data in chuva_mediana:
+            item["chuva_principal_mm"] = item["chuva_mm"]
+            item["chuva_mm"] = chuva_mediana[data]
+            # chance de chuva = em quantas versões chove pelo menos 1 mm (coerente com a quantidade)
+            item["prob"] = round(100 * sum(1 for c in conjunto if (c.get(data) or 0) >= 1.0) / len(conjunto))
         if i == 0:
             item.update({"media": round(ultima["nivel"], 2), "atual": True})
         else:
@@ -218,7 +232,7 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
     ]
     datas_chuva = [(hoje + dt.timedelta(days=i)).isoformat() for i in range(-30, 8)]
     chuva_diaria = [[d, round(chuva_bacia.get(d, 0.0), 1), d > hoje.isoformat()] for d in datas_chuva]
-    chuva_7d = round(sum(previsao["diario"].get((hoje + dt.timedelta(days=i)).isoformat(), {}).get("chuva_mm") or 0 for i in range(1, 8)), 1)
+    chuva_7d = round(sum(chuva_bacia.get((hoje + dt.timedelta(days=i)).isoformat(), 0.0) or 0 for i in range(1, 8)), 1)
 
     # fatores de risco
     limites_chuva = cfg_prev.get("limites_chuva_7d", [40, 80, 150])

@@ -274,6 +274,7 @@ def _faixa_empirica(pares, chuva_prevista):
 
 
 MIN_CENARIOS = 5
+QUANTIS_FAIXA = (0.25, 0.75)  # faixa "mais provável": onde o rio fica em metade dos casos
 GRADE_NORMAL = np.array([-1.64, -1.28, -0.84, -0.52, -0.25, 0.0, 0.25, 0.52, 0.84, 1.28, 1.64])
 
 
@@ -282,8 +283,11 @@ def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, mon
            cotas_extras=None, cenarios_chuva=None):
     """Previsão dos próximos 7 dias a partir do nível atual.
 
-    A linha central ("media") usa a previsão de chuva principal. A faixa de 80%
-    (10º a 90º percentil) e as chances juntam duas incertezas:
+    Com as versões da chuva (`cenarios_chuva`), a linha central ("media") é a
+    MEDIANA das previsões feitas com cada versão. Ela é bem mais estável que a
+    previsão feita só com a chuva "principal", que muda várias vezes por dia.
+    A faixa "mais provável" (25º a 75º percentil: metade dos casos) e as chances
+    juntam duas incertezas:
 
     * a da chuva: com `cenarios_chuva` (as versões da previsão por conjunto), o
       modelo roda uma vez para cada versão. Uma chuva forte que só aparece em
@@ -317,6 +321,8 @@ def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, mon
             chuvas.append(c)
     usa_cenarios = len(chuvas) > 1
     medias_cenario = [simular(modelo, hoje, niveis, c, montante, atraso) for c in chuvas] if usa_cenarios else [medias]
+    if usa_cenarios:
+        medias = [float(v) for v in np.median(np.array(medias_cenario), axis=0)]
 
     saida, abaixo_max, acima_max = [], 0.0, 0.0
     for k, media in enumerate(medias):
@@ -330,8 +336,8 @@ def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, mon
             desvio_h = modelo["rmse_horizonte"][k] * fator_incerteza * (1 + crescimento_diario * k)
             amostras = np.concatenate([mc[k] + desvio_h * GRADE_NORMAL for mc in medias_cenario])
         amostras = np.maximum(amostras, piso)
-        abaixo = max(0.0, media - float(np.quantile(amostras, 0.1)))
-        acima = max(0.0, float(np.quantile(amostras, 0.9)) - media)
+        abaixo = max(0.0, media - float(np.quantile(amostras, QUANTIS_FAIXA[0])))
+        acima = max(0.0, float(np.quantile(amostras, QUANTIS_FAIXA[1])) - media)
         abaixo_max, acima_max = max(abaixo_max, abaixo), max(acima_max, acima)
         chance = lambda c, a=amostras: float(np.mean(a >= c))  # noqa: E731
         item.update({
