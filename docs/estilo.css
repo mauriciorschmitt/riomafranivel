@@ -228,6 +228,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 20px 48px; }
 .alcance { position: relative; height: 34px; background-color: var(--papel); border: 1px solid var(--linha); }
 .alcance .faixa-prov { position: absolute; top: 7px; bottom: 7px; background: var(--agua-forte); border: 1.5px solid var(--agua); }
 .alcance .media { position: absolute; top: 1px; bottom: 1px; width: 4px; margin-left: -2px; background: var(--tinta); }
+.alcance.so-tendencia .media { background: var(--tinta-fraca); width: 3px; }
 .impacto-texto .entre { display: block; font-size: 0.82rem; color: var(--tinta-fraca); margin-top: 2px; }
 .impacto-texto { font-size: 0.95rem; }
 .impacto-texto strong { font-weight: 700; }

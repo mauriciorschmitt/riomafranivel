@@ -146,12 +146,17 @@
     const maior = (arr) => arr.reduce((a, b) => ((b.prob_inundacao ?? 0) > (a.prob_inundacao ?? 0) ? b : a), arr[0]);
     // porcentagem só até 3 dias à frente; depois disso a chuva prevista erra demais
     const perto = maior(dias.slice(0, 3)), longe = maior(dias.slice(3));
-    const pPerto = perto?.prob_inundacao ?? 0, pLonge = longe?.prob_inundacao ?? 0;
+    const pPerto = perto?.prob_inundacao ?? 0;
+    const distantes = dias.slice(3);
+    const inicioAlerta = faixas()[0]?.cota ?? Infinity;
+    void longe;
     let sub;
     if (acima) sub = "Quem mora em área de risco deve seguir as orientações da Defesa Civil: <strong>199</strong>.";
     else if (pPerto >= 0.2) sub = `<strong>Pode passar da cota de inundação (${fmt(cota)} m) ${naDia(perto.data)}</strong>: chance de ${pct(pPerto)}, contando com a chuva prevista.`;
-    else if (pLonge >= 0.3) sub = `Sem risco nos próximos 3 dias. <strong>Pode subir ${naDia(longe.data)}</strong>, se a chuva prevista se confirmar. A previsão fica mais segura nos próximos dias.`;
-    else if (pPerto >= 0.05 || pLonge >= 0.1) sub = "Risco baixo de inundação nos próximos dias.";
+    else if (distantes.some((d) => d.media >= inicioAlerta)) {
+      const alto = distantes.reduce((a, b) => (b.media > a.media ? b : a));
+      sub = `Sem risco nos próximos 3 dias. <strong>Tendência de subida ${naDia(alto.data)}</strong>, se a chuva prevista se confirmar. A previsão fica mais segura mais perto da data.`;
+    } else if (pPerto >= 0.05) sub = "Risco baixo de inundação nos próximos 3 dias.";
     else sub = "Sem risco de inundação previsto para os próximos 7 dias.";
     return [titulo, sub];
   }
@@ -232,7 +237,7 @@
     let previsao = "";
     if (p != null && p < 0.05) previsao = " Pela previsão, a água não chega lá nos próximos 7 dias.";
     else if (pPerto >= 0.05) previsao = ` Chance de chegar lá nos próximos 3 dias: <strong>${pct(pPerto)}</strong>, maior ${naDia(perto.data)}.`;
-    else if (p != null && p >= 0.2) previsao = ` Nos próximos 3 dias, não. Depois, <strong>pode chegar lá se a chuva prevista se confirmar</strong>; a previsão fica mais segura mais perto da data.`;
+    else if (dias.slice(3).some((d) => d.media >= e.cota)) previsao = ` Nos próximos 3 dias, não. Depois, pela tendência, <strong>pode chegar lá se a chuva prevista se confirmar</strong>; a previsão fica mais segura mais perto da data.`;
     else if (p != null) previsao = " Risco baixo nos próximos 7 dias.";
     el.innerHTML = `<strong>${esc(e.nome)}</strong> começa a ser atingido com ${fmt(e.cota)} m. O rio está <strong>${fmt(e.cota - n)} m abaixo</strong> disso.${previsao}`;
     if (pPerto >= 0.2) el.classList.add("perigo");
@@ -421,7 +426,7 @@
     const agua = css("--agua");
     return [
       { label: "_max", data: maxs, borderWidth: 0, pointRadius: 0, fill: "+1", backgroundColor: css("--agua-fundo"), spanGaps: false },
-      { label: "Faixa provável (8 em 10 casos)", data: mins, borderWidth: 0, pointRadius: 0, fill: false, backgroundColor: css("--agua-fundo"), borderColor: agua },
+      { label: "Faixa mais provável (metade dos casos)", data: mins, borderWidth: 0, pointRadius: 0, fill: false, backgroundColor: css("--agua-fundo"), borderColor: agua },
     ];
   }
 
@@ -477,8 +482,9 @@
     const agora = D.atual.nivel;
     const observado = [...passados.map((p) => p[1]), agora, ...vazio(futuros.length)];
     const previsto = [...vazio(np), agora, ...futuros.map((d) => d.media)];
-    const maxs = [...vazio(np), agora, ...futuros.map((d) => d.max)];
-    const mins = [...vazio(np), agora, ...futuros.map((d) => d.min)];
+    const LIMITE = 3; // dias com faixa; depois disso é só tendência
+    const maxs = [...vazio(np), agora, ...futuros.map((d, i) => (i < LIMITE ? d.max : null))];
+    const mins = [...vazio(np), agora, ...futuros.map((d, i) => (i < LIMITE ? d.min : null))];
     const chuvaMap = Object.fromEntries(D.chuva_diaria.map((c) => [c[0], c]));
     const chuva = rotDatas.map((d) => chuvaMap[d]?.[1] ?? null);
     const agua = css("--agua");
@@ -497,7 +503,13 @@
         labels: rotulos,
         datasets: [
           { type: "line", label: D.serie_diaria_media ? "Nível médio do dia" : "Nível máximo do dia", data: observado, borderColor: css("--tinta"), borderWidth: 2.5, pointRadius: 3, tension: 0.35 },
-          { type: "line", label: "Nível previsto", data: previsto, borderColor: agua, borderWidth: 2.5, borderDash: [6, 4], pointRadius: 3, tension: 0.35 },
+          {
+            type: "line", label: "Nível previsto", data: previsto, borderColor: agua, borderWidth: 2.5, borderDash: [6, 4], pointRadius: 3, tension: 0.35,
+            // depois de 3 dias a linha fica clara: é tendência, não previsão com faixa
+            segment: { borderColor: (c) => (c.p0DataIndex >= np + LIMITE ? css("--tinta-fraca") : undefined), borderWidth: (c) => (c.p0DataIndex >= np + LIMITE ? 1.5 : undefined) },
+            pointBackgroundColor: (c) => (c.dataIndex > np + LIMITE ? css("--tinta-fraca") : agua),
+            pointBorderColor: (c) => (c.dataIndex > np + LIMITE ? css("--tinta-fraca") : agua),
+          },
           ...faixaDatasets(maxs, mins).map((d) => ({ ...d, type: "line", tension: 0.35 })),
           {
             type: "bar", label: "Chuva na bacia", data: chuva, yAxisID: "y2", order: 10,
@@ -510,14 +522,15 @@
     });
 
     const pico = futuros.reduce((a, b) => (b.media > a.media ? b : a), futuros[0]);
-    const riscoMax = futuros.reduce((a, b) => ((b.prob_inundacao ?? 0) > (a.prob_inundacao ?? 0) ? b : a), futuros[0]);
     const cotaInund = inundacao();
     let texto;
-    const indiceRisco = futuros.indexOf(riscoMax) + 1; // 1 = amanhã
-    if ((riscoMax.prob_inundacao ?? 0) >= 0.2 && indiceRisco <= 3) {
-      texto = `Atenção: há ${pct(riscoMax.prob_inundacao)} de chance de o rio passar de ${fmt(cotaInund)} m ${naDia(riscoMax.data)} (${dataCurta(riscoMax.data)}), contando com a chuva prevista.`;
-    } else if ((riscoMax.prob_inundacao ?? 0) >= 0.3) {
-      texto = `Com a chuva prevista, o rio pode voltar a subir e chegar perto de ${fmt(cotaInund)} m ${naDia(riscoMax.data)} (${dataCurta(riscoMax.data)}). Como faltam mais de 3 dias, trate como tendência: a previsão de chuva ainda pode mudar bastante.`;
+    // chances só valem para os 3 primeiros dias
+    const riscoPerto = futuros.slice(0, 3).reduce((a, b) => ((b.prob_inundacao ?? 0) > (a.prob_inundacao ?? 0) ? b : a), futuros[0]);
+    if ((riscoPerto.prob_inundacao ?? 0) >= 0.2) {
+      texto = `Atenção: há ${pct(riscoPerto.prob_inundacao)} de chance de o rio passar de ${fmt(cotaInund)} m ${naDia(riscoPerto.data)} (${dataCurta(riscoPerto.data)}), contando com a chuva prevista.`;
+    } else if (futuros.slice(3).some((d) => d.media >= (faixas()[0]?.cota ?? Infinity))) {
+      const alto = futuros.slice(3).reduce((a, b) => (b.media > a.media ? b : a));
+      texto = `Nos próximos 3 dias, ${(riscoPerto.prob_inundacao ?? 0) >= 0.05 ? "risco baixo" : "sem risco"} de inundação. Depois, a tendência é de subida para perto de ${fmt(Math.round(alto.media * 2) / 2, 1)} m ${naDia(alto.data)}, se a chuva prevista se confirmar. A linha clara do gráfico é só tendência: a previsão de chuva desses dias ainda muda bastante.`;
     } else if (pico.media > agora + 0.15) {
       texto = `Com a chuva prevista, o rio deve voltar a subir e chegar perto de ${fmt(pico.media)} m ${naDia(pico.data)} (${dataCurta(pico.data)}), abaixo da cota de inundação.`;
     } else {
@@ -567,9 +580,15 @@
     let texto = `<span class="nivel">${fmt(d.media)} m</span>`;
     let risco = "normal";
     const alvo = possiveis.at(-1);
-    if (alvo && distante) {
-      texto += `Tendência: pode chegar a <strong>${esc(alvo.m.titulo)}</strong> (${fmt(alvo.m.cota)} m), se a chuva prevista se confirmar.`;
-      risco = "atencao";
+    if (distante) {
+      // só tendência: direção e valor aproximado da linha central, sem porcentagem
+      const anterior = D.previsao_dias[i - 1]?.media ?? n;
+      const dif = d.media - anterior;
+      const direcao = dif > 0.15 ? "deve subir" : dif < -0.15 ? "deve baixar" : "deve ficar estável";
+      const perto = Math.round(d.media * 2) / 2;
+      const marco = marcos.filter((m) => m.cota >= inicioAlerta && m.cota <= d.media + 0.1).at(-1);
+      texto = `<span class="nivel">~${fmt(perto, 1)} m</span>Tendência: ${direcao}${marco ? `, perto de <strong>${esc(marco.titulo)}</strong> (${fmt(marco.cota)} m)` : ""}${dif > 0.15 ? ", se a chuva prevista se confirmar" : ""}.`;
+      return { risco: marco ? "atencao" : "normal", texto };
     } else if (alvo) {
       texto += `${alvo.p >= 0.5 ? "Deve chegar a" : "Pode chegar a"} <strong>${esc(alvo.m.titulo)}</strong> (${fmt(alvo.m.cota)} m): chance de ${pct(alvo.p)}.`;
       // cor de alarme só quando a chance é relevante; possibilidade pequena fica só em negrito
@@ -594,7 +613,8 @@
     const dias = D.previsao_dias;
     const marcos = [...(D.config.regua || [])].filter((m) => m.cota != null).sort((a, b) => a.cota - b.cota);
     const n = D.atual.nivel;
-    const valores = [n, ...dias.flatMap((d) => [d.min ?? d.media, d.max ?? d.media, d.media])].filter((v) => v != null);
+    // a escala considera só o que aparece: faixa até 3 dias, linha central depois
+    const valores = [n, ...dias.flatMap((d, i) => (i >= 4 ? [d.media] : [d.min ?? d.media, d.max ?? d.media, d.media]))].filter((v) => v != null);
     let lo = Math.max(0, Math.floor(Math.min(...valores) - 0.5));
     let hi = Math.ceil(Math.max(...valores) + 0.5);
     const proxima = faixas().find((f) => f.cota > Math.max(...valores));
@@ -630,13 +650,14 @@
       const nome = i === 0 ? "Hoje" : i === 1 ? "Amanhã" : SEMANA_CURTA[dt.getDay()];
       const { risco, texto } = impactoDoDia(d, i, marcos);
       const icone = iconeTempo(d.codigo).split("</svg>")[0] + "</svg>";
-      const faixa = i === 0 || d.min == null ? "" : `<span class="faixa-prov" style="left:${x(d.min)};width:calc(${x(d.max)} - ${x(d.min)})"></span>`;
-      const rotulo = i === 0 ? `Agora: ${fmt(n)} metros` : `Mais provável ${fmt(d.media)} metros; pode ficar entre ${fmt(d.min)} e ${fmt(d.max)}`;
-      const entre = i === 0 || d.min == null ? "" : `<small class="entre">entre ${fmt(d.min, 1)} e ${fmt(d.max, 1)} m</small>`;
+      const distante = i >= 4;
+      const faixa = i === 0 || distante || d.min == null ? "" : `<span class="faixa-prov" style="left:${x(d.min)};width:calc(${x(d.max)} - ${x(d.min)})"></span>`;
+      const rotulo = i === 0 ? `Agora: ${fmt(n)} metros` : distante ? `Tendência: perto de ${fmt(d.media, 1)} metros` : `Mais provável ${fmt(d.media)} metros; deve ficar entre ${fmt(d.min)} e ${fmt(d.max)}`;
+      const entre = i === 0 || distante || d.min == null ? "" : `<small class="entre">mais provável entre ${fmt(d.min, 1)} e ${fmt(d.max, 1)} m</small>`;
       return `<li class="impacto${i === 0 ? " hoje" : ""}" data-risco="${risco}">
         <div class="impacto-dia">${nome}<small>${dataCurta(d.data)}</small></div>
         <div class="impacto-chuva">${icone}<span>${d.chuva_mm != null ? `${fmt(d.chuva_mm, 0)} mm` : "–"}<small>${palavraChuva(d.chuva_mm, d.prob)}</small></span></div>
-        <div class="alcance" role="img" aria-label="${rotulo}" style="background:${fundo}">${faixa}<span class="media" style="left:${x(i === 0 ? n : d.media)}"></span></div>
+        <div class="alcance${distante ? " so-tendencia" : ""}" role="img" aria-label="${rotulo}" style="background:${fundo}">${faixa}<span class="media" style="left:${x(i === 0 ? n : d.media)}"></span></div>
         <p class="impacto-texto">${texto}${entre}</p>
       </li>`;
     }).join("");
@@ -670,7 +691,11 @@
 
     const m = D.modelo;
     $("#nota-modelo").innerHTML = m.tipo === "calibrado"
-      ? `<strong>Como a previsão é feita.</strong> Um modelo estatístico aprendeu, com ${m.n_dias} dias de dados desta estação, como o rio responde à chuva na bacia. Ele é retreinado toda semana. ${D.cenarios_chuva ? `A faixa e as chances levam em conta ${D.cenarios_chuva} versões da previsão de chuva (conjunto do centro europeu ECMWF): se a chuva forte aparece só em parte delas, a chance fica menor.` : "Nesta atualização a previsão de chuva por conjunto não estava disponível, então as chances tratam a chuva prevista como certa e podem estar altas demais."} Porcentagens aparecem só até 3 dias à frente; depois disso o site mostra só a tendência. É uma estimativa, não uma certeza: siga sempre a Defesa Civil.`
+      ? `<strong>Como a previsão é feita.</strong> Um modelo estatístico aprendeu, com ${m.n_dias} dias de dados desta estação, como o rio responde à chuva na bacia, e é retreinado toda semana. ${
+          D.cenarios_chuva
+            ? `Ele roda uma vez para cada uma das ${D.cenarios_chuva} versões da previsão de chuva do centro europeu (ECMWF). A linha central é a mediana dessas rodadas, por isso muda pouco de uma atualização para outra; a chuva mostrada também é a mediana das versões.`
+            : "Nesta atualização a previsão de chuva por conjunto não estava disponível, então a linha e as chances usam só a previsão principal, que oscila mais."
+        } A faixa é a "mais provável": o rio deve ficar dentro dela em cerca de metade dos casos. Números e chances aparecem só até 3 dias; depois disso o site mostra só a tendência, porque a previsão de chuva ainda muda muito. É uma estimativa, não uma certeza: siga sempre a Defesa Civil.`
       : `<strong>Previsão ainda não calibrada para esta estação</strong> (${esc(m.motivo || "sem histórico suficiente")}). Os valores usam coeficientes genéricos e podem errar bastante.`;
     $("#glofas").innerHTML = f.glofas
       ? `<strong>Vazão prevista pelo sistema europeu GloFAS:</strong> pico de ${fmt(f.glofas.pico_m3s, 0)} m³/s em ${dataCurta(f.glofas.data)}. É um modelo global de baixa resolução, mostrado só como referência; ele não entra na previsão acima.`
@@ -766,10 +791,10 @@
       h.map((x) => `<tr><td>${x.dias === 1 ? "1 dia" : `${x.dias} dias`} de antecedência</td>
         <td class="${x.erro_medio <= x.erro_palpite ? "melhor" : "pior"}">${cm(x.erro_medio)}</td>
         <td>${cm(x.erro_palpite)}</td>
-        <td>${x.na_faixa == null ? "–" : pct(x.na_faixa)} <small>(esperado: 80%)</small></td>
+        <td>${x.na_faixa == null ? "–" : pct(x.na_faixa)} <small>(esperado: perto de 50%)</small></td>
         <td>${x.n}</td></tr>`).join("")
     }</tbody></table>`);
-    partes.push(`<p class="explica">Em verde, quando a previsão errou menos que o palpite. Se a faixa acertar bem menos que 80% das vezes, ela está estreita demais; se acertar quase sempre, está larga demais.</p>`);
+    partes.push(`<p class="explica">Em verde, quando a previsão errou menos que o palpite. A faixa é a "mais provável": o rio deve cair dentro dela em cerca de metade dos dias. Bem menos que isso, ela está estreita demais; quase sempre, está larga demais.</p>`);
     if ((p.serie || []).length >= 3) partes.push(`<div class="grafico"><canvas id="graf-placar" aria-label="Previsto e observado, dia a dia"></canvas></div>`);
     el.innerHTML = partes.join("");
     if ((p.serie || []).length >= 3 && typeof Chart !== "undefined") {
