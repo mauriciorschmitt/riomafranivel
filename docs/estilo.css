@@ -324,6 +324,10 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 20px 48px; }
 .abrigos ul { list-style: none; padding: 0; margin: 0; }
 .abrigos li { padding: 8px 0; border-bottom: 1px solid var(--linha); }
 .abrigos li span { display: block; font-size: 0.88rem; color: var(--tinta-suave); }
+.abrigos li span.abrigo-ordem { display: inline-block; font: 800 0.75rem/1 var(--fonte-numero); text-transform: uppercase; letter-spacing: 0.05em; background: var(--tinta); color: var(--fundo); padding: 3px 6px; margin-bottom: 4px; }
+.abrigos li .botao-pequeno { margin-top: 6px; }
+.abrigos > div > .botao-pequeno { margin-top: 10px; }
+.botao-pequeno { display: inline-block; font-size: 0.85rem; padding: 5px 10px; }
 .plano-folha { overflow-wrap: anywhere; border: 2px dashed var(--tinta); padding: 18px; margin-top: 12px; background: var(--papel); display: grid; gap: 14px; }
 .plano-folha h4 { margin: 0; font: 800 1.5rem var(--fonte-numero); text-transform: uppercase; }
 .plano-campo { display: grid; grid-template-columns: 220px 1fr; gap: 12px; align-items: end; }
