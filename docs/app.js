@@ -900,12 +900,22 @@
         ${o.fixo ? `<a class="botao" href="${tel(o.fixo)}">Fixo ${esc(o.fixo)}</a>` : ""}
       </div></li>`).join("");
     const abrigos = (ct.abrigos || []).filter((a) => a.nome);
+    const mapas = ct.mapas_abrigos || {};
     $("#bloco-abrigos").hidden = !abrigos.length;
     const porCidade = {};
     abrigos.forEach((a) => (porCidade[a.cidade || ""] ||= []).push(a));
-    $("#abrigos").innerHTML = Object.entries(porCidade).map(([cid, lista]) => `
-      <div>${cid ? `<h4>${esc(cid)}</h4>` : ""}<ul>${lista.map((a) => `<li><strong>${esc(a.nome)}</strong>
-        <span>${esc([a.endereco, a.capacidade ? `Capacidade para ${Number(a.capacidade).toLocaleString("pt-BR")} pessoas` : "", a.obs].filter(Boolean).join(". "))}</span></li>`).join("")}</ul></div>`).join("");
+    const ordemTexto = (n) => (n === 1 ? "Abre primeiro" : `${n}º a abrir`);
+    $("#abrigos").innerHTML = Object.entries(porCidade).map(([cid, lista]) => {
+      // quem tem ordem de abertura vem primeiro, na ordem; os outros depois
+      lista.sort((a, b) => (a.ordem ?? 99) - (b.ordem ?? 99));
+      const mapaCidade = mapas[cid] ? `<a class="botao botao-pequeno" href="${esc(mapas[cid])}" target="_blank" rel="noopener">Ver os abrigos no mapa</a>` : "";
+      return `<div>${cid ? `<h4>${esc(cid)}</h4>` : ""}<ul>${lista.map((a) => `<li>
+          ${a.ordem ? `<span class="abrigo-ordem">${ordemTexto(a.ordem)}</span>` : ""}
+          <strong>${esc(a.nome)}</strong>
+          <span>${esc([a.endereco, a.capacidade ? `Capacidade para ${Number(a.capacidade).toLocaleString("pt-BR")} pessoas` : "", a.obs].filter(Boolean).join(". "))}</span>
+          ${a.mapa ? `<a class="botao botao-pequeno" href="${esc(a.mapa)}" target="_blank" rel="noopener">Como chegar</a>` : ""}
+        </li>`).join("")}</ul>${mapaCidade}</div>`;
+    }).join("");
     renderPlano();
   }
 
@@ -928,7 +938,7 @@
       ${campo("Para onde vão os animais:")}
       <div><strong>Telefones</strong><div class="plano-telefones"><span>Defesa Civil 199</span><span>Bombeiros 193</span><span>SAMU 192</span><span>Polícia 190</span>${
         orgaos.map((o) => `<span>${esc(o.nome)}: ${esc(o.plantao || o.fixo)}</span>`).join("")}</div></div>
-      ${abrigos.length ? `<div><strong>Abrigos da cidade</strong><ul class="plano-lista">${abrigos.map((a) => `<li>${esc(a.nome)}${a.endereco ? `, ${esc(a.endereco)}` : ""}</li>`).join("")}</ul></div>` : ""}
+      ${abrigos.length ? `<div><strong>Abrigos da cidade</strong><ul class="plano-lista">${[...abrigos].sort((a, b) => (a.cidade || "").localeCompare(b.cidade || "") || (a.ordem ?? 99) - (b.ordem ?? 99)).map((a) => `<li>${esc(a.nome)}${a.endereco ? `, ${esc(a.endereco)}` : ""}${a.cidade ? ` (${esc(a.cidade)})` : ""}${a.ordem ? `: ${a.ordem === 1 ? "abre primeiro" : `${a.ordem}º a abrir`}` : ""}</li>`).join("")}</ul></div>` : ""}
       <div><strong>Mochila pronta</strong><ul class="plano-lista"><li>Documentos em saco plástico</li><li>Remédios e receitas</li><li>Carregador e bateria extra</li><li>Lanterna e pilhas</li><li>Roupa, agasalho e cobertor</li><li>Ração, coleira e remédios dos animais</li></ul></div>
     </div>`;
     $("#orientacoes").innerHTML = c.orientacoes_url
