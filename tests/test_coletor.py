@@ -403,7 +403,7 @@ def test_chuva_incerta_diminui_a_certeza():
     assert incerta[4]["cenarios"] == 20
     assert incerta[4]["prob_inundacao"] < certa[4]["prob_inundacao"]
     assert incerta[4]["min"] < certa[4]["min"]           # a faixa passa a incluir "a chuva não veio"
-    assert incerta[4]["media"] == certa[4]["media"]      # a linha central segue a previsão principal
+    assert incerta[4]["media"] < certa[4]["media"]       # a linha central é a mediana das versões, não a principal
 
 
 def test_carimbo_de_versao_no_index(tmp_path, monkeypatch):
