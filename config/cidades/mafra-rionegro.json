@@ -250,7 +250,7 @@
     "telegram_canal": ""
   },
   "contatos": {
-    "_nota": "Transcritos de outro painel. Confirme cada número com as prefeituras. Itens sem telefone ou sem nome não aparecem.",
+    "_nota": "Itens sem telefone ou sem nome não aparecem. Abrigos: \"ordem\" é a ordem em que a prefeitura abre (1 = abre primeiro); \"mapa\" é o link do Google Maps (vira o botão Como chegar). \"mapas_abrigos\" tem um link de mapa por cidade.",
     "orgaos": [
       {
         "nome": "Defesa Civil de Mafra (SC)",
@@ -274,45 +274,54 @@
     "abrigos": [
       {
         "cidade": "Rio Negro (PR)",
-        "nome": "Ginásio XV de Novembro (Vila Militar)",
-        "endereco": "Praça Santo Ângelo",
-        "capacidade": 2000,
-        "obs": "Acesso para pessoas com deficiência"
+        "nome": "Ginásio de Esportes José Muller",
+        "endereco": "",
+        "capacidade": null,
+        "obs": "",
+        "mapa": "https://maps.app.goo.gl/a3uD33T4ySoXHfpu6"
       },
       {
         "cidade": "Rio Negro (PR)",
         "nome": "Associação de Moradores do Bairro Passa Três",
         "endereco": "Rua Ludovico Schuster",
         "capacidade": 200,
-        "obs": "Cozinha comunitária"
+        "obs": "Cozinha comunitária",
+        "mapa": ""
       },
       {
         "cidade": "Rio Negro (PR)",
         "nome": "Centro Comunitário Raia",
         "endereco": "Rua Juvenal F. do Amaral",
         "capacidade": 60,
-        "obs": "Aceita animais de estimação"
+        "obs": "Aceita animais de estimação",
+        "mapa": ""
       },
       {
         "cidade": "Mafra (SC)",
-        "nome": "Ginásio de Esportes Wilson Buch",
-        "endereco": "Av. Cel. José Severiano Maia",
-        "capacidade": 800,
-        "obs": ""
+        "ordem": 1,
+        "nome": "CEMMA (Centro de Educação do Município de Mafra)",
+        "endereco": "R. Me. Inês, 170 - Centro II Alto de Mafra, Mafra - SC, 89300-000",
+        "capacidade": null,
+        "obs": "",
+        "mapa": "https://maps.app.goo.gl/7yQvdrEktErphsZY9"
       },
       {
         "cidade": "Mafra (SC)",
-        "nome": "EEB Barão de Antonina",
-        "endereco": "Rua Mathias Piechnick, Centro",
-        "capacidade": 450,
-        "obs": ""
+        "ordem": 2,
+        "nome": "EEB Professor Mário de Oliveira Goeldner",
+        "endereco": "R. Gov. Jorge Lacerda, 234 - Vila Ferroviaria, Mafra - SC, 89300-000",
+        "capacidade": null,
+        "obs": "",
+        "mapa": "https://maps.app.goo.gl/R7nFoozCdXggKtU5A"
       },
       {
         "cidade": "Mafra (SC)",
-        "nome": "Pavilhão São José",
-        "endereco": "Bairro Vila Nova",
-        "capacidade": 300,
-        "obs": ""
+        "ordem": 3,
+        "nome": "EEB Dr. Francisco Isabel",
+        "endereco": "Av. Cel. Severiano Maia - Jardim América, Mafra - SC, 89300-000",
+        "capacidade": null,
+        "obs": "",
+        "mapa": "https://maps.app.goo.gl/eNvTtuGJ4BFATEfVA"
       }
     ]
   },
