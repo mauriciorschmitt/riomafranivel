@@ -1,0 +1,24 @@
+emitida,sistema,data,previsto_m,min_m,max_m,obs
+2026-09-28T14:30,regua-viva,2026-09-29,3.67,3.52,4.30,modelo com 51 versões da chuva (ECMWF)
+2026-09-28T14:30,regua-viva,2026-09-30,3.93,3.49,5.39,
+2026-09-28T14:30,regua-viva,2026-10-01,4.85,3.98,6.90,chance de passar de 7 m: 8%
+2026-09-28T14:30,regua-viva,2026-10-02,6.19,4.34,8.45,chance de passar de 7 m: 31%
+2026-09-28T14:30,regua-viva,2026-10-03,6.96,4.30,9.35,chance de passar de 7 m: 41%
+2026-09-28T14:30,regua-viva,2026-10-04,6.63,3.97,9.32,chance de passar de 7 m: 42%
+2026-09-28T14:30,regua-viva,2026-10-05,6.29,3.63,9.42,chance de passar de 7 m: 47%
+2026-09-28T14:30,outro-sistema,2026-09-29,3.55,,,lido do gráfico (±0,1 m)
+2026-09-28T14:30,outro-sistema,2026-09-30,3.52,,,"lido do gráfico; o texto do site dizia ""baixando até Qua (3,52 m)"""
+2026-09-28T14:30,outro-sistema,2026-10-01,3.76,,,lido do gráfico (±0,1 m)
+2026-09-28T14:30,outro-sistema,2026-10-02,4.12,,,lido do gráfico (±0,1 m)
+2026-09-28T14:30,outro-sistema,2026-10-03,4.26,,,"lido do gráfico; o texto do site dizia ""pico esperado de 4,26 m em Sáb"""
+2026-09-28T14:30,outro-sistema,2026-10-04,3.94,,,lido do gráfico (±0,1 m)
+2026-09-29T17:00,regua-viva,2026-09-30,3.63,3.60,4.40,versão antiga do modelo (faixa de 8 em 10)
+2026-09-29T17:00,regua-viva,2026-10-01,4.15,3.90,6.10,
+2026-09-29T17:00,regua-viva,2026-10-02,5.19,4.50,8.10,
+2026-09-29T17:00,regua-viva,2026-10-03,5.81,4.50,9.10,
+2026-09-29T17:45,outro-sistema,2026-09-30,3.99,3.60,4.60,dos cartões do site (faixa sem definição informada)
+2026-09-29T17:45,outro-sistema,2026-10-01,4.32,3.30,6.00,
+2026-09-29T17:45,outro-sistema,2026-10-02,4.47,3.37,6.38,
+2026-09-29T17:45,outro-sistema,2026-10-03,4.21,3.20,5.50,
+2026-09-29T17:45,outro-sistema,2026-10-04,3.89,2.80,4.30,
+2026-09-29T17:45,outro-sistema,2026-10-05,3.66,2.40,4.10,
