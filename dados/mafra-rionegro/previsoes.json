@@ -328,5 +328,60 @@
         "prob_inundacao": 0.29
       }
     ]
+  },
+  "2026-10-02": {
+    "emitida": "2026-10-02T07:00",
+    "nivel_atual": 3.84,
+    "dias": [
+      {
+        "data": "2026-10-03",
+        "media": 3.8,
+        "min": 3.77,
+        "max": 3.89,
+        "prob_inundacao": 0.0
+      },
+      {
+        "data": "2026-10-04",
+        "media": 3.41,
+        "min": 3.38,
+        "max": 3.94,
+        "prob_inundacao": 0.0
+      },
+      {
+        "data": "2026-10-05",
+        "media": 3.21,
+        "min": 3.18,
+        "max": 4.49,
+        "prob_inundacao": 0.0
+      },
+      {
+        "data": "2026-10-06",
+        "media": 3.43,
+        "min": 3.37,
+        "max": 5.17,
+        "prob_inundacao": 0.036
+      },
+      {
+        "data": "2026-10-07",
+        "media": 3.61,
+        "min": 3.53,
+        "max": 5.5,
+        "prob_inundacao": 0.093
+      },
+      {
+        "data": "2026-10-08",
+        "media": 3.6,
+        "min": 3.47,
+        "max": 5.81,
+        "prob_inundacao": 0.114
+      },
+      {
+        "data": "2026-10-09",
+        "media": 3.45,
+        "min": 3.32,
+        "max": 6.13,
+        "prob_inundacao": 0.137
+      }
+    ]
   }
 }
