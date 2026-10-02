@@ -217,6 +217,15 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
             item["prob"] = round(100 * sum(1 for c in conjunto if (c.get(data) or 0) >= 1.0) / len(conjunto))
         if i == 0:
             item.update({"media": round(ultima["nivel"], 2), "atual": True})
+            # o que o site previu ONTEM (às 7h) para hoje: mostra se a previsão acertou
+            ontem_emitida = (hoje - dt.timedelta(days=1)).isoformat()
+            anterior = (bruto.get("previsoes") or {}).get(ontem_emitida)
+            prevista = next((x for x in (anterior or {}).get("dias", []) if x.get("data") == data), None)
+            if prevista and prevista.get("media") is not None:
+                item["previsto_ontem"] = {
+                    "media": prevista["media"], "min": prevista.get("min"), "max": prevista.get("max"),
+                    "emitida": anterior.get("emitida"),
+                }
         else:
             item.update({k: v for k, v in diaria[i - 1].items() if k != "data"})
         dias_previsao.append(item)

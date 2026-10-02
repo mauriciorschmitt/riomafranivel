@@ -267,10 +267,16 @@ def _normal_acima(limite, media, desvio):
 
 
 def _faixa_empirica(pares, chuva_prevista):
-    """Quantis do erro nas situações de validação com chuva mais parecida com a prevista."""
+    """Erros nas situações de validação com chuva mais parecida com a prevista.
+
+    Os erros são CENTRADOS (tira-se a mediana): a faixa deve mostrar só a
+    incerteza em volta da linha central. Se o modelo tiver viés (errar sempre
+    para um lado), isso é para corrigir no modelo, não para empurrar a faixa;
+    senão a faixa fica toda de um lado da previsão e nunca admite o outro.
+    """
     ordenados = sorted(pares, key=lambda p: abs(math.log1p(p[0]) - math.log1p(chuva_prevista)))
     erros = np.array([e for _, e in ordenados[: max(MIN_ANALOGOS, len(ordenados) * 2 // 5)]])
-    return erros
+    return erros - np.median(erros)
 
 
 MIN_CENARIOS = 5

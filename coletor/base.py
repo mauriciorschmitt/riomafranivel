@@ -165,7 +165,7 @@ def guardar_previsao(slug: str, saida: dict, agora: dt.datetime) -> dict:
             "emitida": saida["gerado_em"],
             "nivel_atual": saida["atual"]["nivel"],
             "dias": [
-                {k: d.get(k) for k in ("data", "media", "min", "max", "prob_inundacao")}
+                {k: d.get(k) for k in ("data", "media", "min", "max", "prob_inundacao", "chuva_mm", "chuva_principal_mm")}
                 for d in saida["previsao_dias"][1:]
             ],
         }
