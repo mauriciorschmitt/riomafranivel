@@ -139,6 +139,15 @@ def test_limpeza_remove_codigo_de_erro_e_pico_isolado():
     assert len(base.limpar_leituras(subida)) == 8
 
 
+def test_faixa_sempre_contem_a_linha_central():
+    cfg, agora, bruto, maximas, treino = _dados_demo()
+    modelo = mod.treinar(treino["niveis"], treino["chuva"])
+    # um modelo que historicamente subestimou: erros quase todos negativos
+    modelo["erros_validacao"] = [[[c, -abs(e) - 0.5] for c, e in p] for p in modelo["erros_validacao"]]
+    prev = mod.prever(modelo, agora.date(), 5.0, treino["niveis"], treino["chuva"], cota_inundacao=7.0)
+    assert all(p["min"] < p["media"] < p["max"] for p in prev)
+
+
 def test_faixa_empirica_assimetrica():
     cfg, agora, bruto, maximas, treino = _dados_demo()
     modelo = mod.treinar(treino["niveis"], treino["chuva"])
@@ -417,3 +426,14 @@ def test_carimbo_de_versao_no_index(tmp_path, monkeypatch):
     assert base.carimbar_versao() is False            # nada mudou: não mexe
     (tmp_path / "app.js").write_text("console.log(2)", encoding="utf-8")
     assert base.carimbar_versao() is True             # código novo: versão nova
+
+
+def test_hoje_mostra_o_que_foi_previsto_ontem():
+    cfg, agora, bruto, maximas, treino = _dados_demo()
+    ontem = (agora.date() - dt.timedelta(days=1)).isoformat()
+    bruto = {**bruto, "previsoes": {ontem: {"emitida": f"{ontem}T07:10", "nivel_atual": 5.0,
+             "dias": [{"data": agora.date().isoformat(), "media": 4.8, "min": 4.6, "max": 5.0}]}}}
+    saida = processar(cfg, bruto, mod.modelo_heuristico({}), maximas)
+    hoje = saida["previsao_dias"][0]
+    assert hoje["previsto_ontem"] == {"media": 4.8, "min": 4.6, "max": 5.0, "emitida": f"{ontem}T07:10"}
+    assert hoje["atual"] is True   # a leitura de agora continua disponível para comparar
