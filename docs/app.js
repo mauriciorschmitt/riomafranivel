@@ -188,7 +188,6 @@
 
     montarLocais();
     renderLocal();
-    renderRegua();
   }
 
   // ------------------------------------------------------------ onde eu moro
@@ -245,6 +244,7 @@
 
   // ------------------------------------------------------------ régua
   function renderRegua() {
+    if ($("#historico")?.hidden) return; // desenhada quando a aba "Régua e histórico" abre
     const el = $("#regua");
     const cfg = D.config;
     const atual = D.atual.nivel;
@@ -614,7 +614,9 @@
     const marcos = [...(D.config.regua || [])].filter((m) => m.cota != null).sort((a, b) => a.cota - b.cota);
     const n = D.atual.nivel;
     // a escala considera só o que aparece: faixa até 3 dias, linha central depois
-    const valores = [n, ...dias.flatMap((d, i) => (i >= 4 ? [d.media] : [d.min ?? d.media, d.max ?? d.media, d.media]))].filter((v) => v != null);
+    const ontem = dias[0]?.previsto_ontem;
+    const valores = [n, ...(ontem ? [ontem.min, ontem.max, ontem.media] : []),
+      ...dias.flatMap((d, i) => (i >= 4 ? [d.media] : i === 0 ? [] : [d.min ?? d.media, d.max ?? d.media, d.media]))].filter((v) => v != null);
     let lo = Math.max(0, Math.floor(Math.min(...valores) - 0.5));
     let hi = Math.ceil(Math.max(...valores) + 0.5);
     const proxima = faixas().find((f) => f.cota > Math.max(...valores));
@@ -648,16 +650,27 @@
     $("#impactos").innerHTML = cabeca + dias.map((d, i) => {
       const dt = dataLocal(d.data);
       const nome = i === 0 ? "Hoje" : i === 1 ? "Amanhã" : SEMANA_CURTA[dt.getDay()];
-      const { risco, texto } = impactoDoDia(d, i, marcos);
+      let { risco, texto } = impactoDoDia(d, i, marcos);
+      const po = i === 0 ? d.previsto_ontem : null;
+      if (po) {
+        const dentro = po.min != null && po.max != null && n >= po.min && n <= po.max;
+        const dif = n - po.media;
+        const conferencia = dentro
+          ? `<span class="confere ok">Dentro do previsto ontem (${fmt(po.min, 1)} a ${fmt(po.max, 1)} m).</span>`
+          : `<span class="confere fora">${fmt(Math.abs(dif))} m ${dif > 0 ? "acima" : "abaixo"} do previsto ontem (${fmt(po.media)} m, faixa ${fmt(po.min, 1)} a ${fmt(po.max, 1)} m).</span>`;
+        texto += conferencia;
+      }
       const icone = iconeTempo(d.codigo).split("</svg>")[0] + "</svg>";
       const distante = i >= 4;
-      const faixa = i === 0 || distante || d.min == null ? "" : `<span class="faixa-prov" style="left:${x(d.min)};width:calc(${x(d.max)} - ${x(d.min)})"></span>`;
-      const rotulo = i === 0 ? `Agora: ${fmt(n)} metros` : distante ? `Tendência: perto de ${fmt(d.media, 1)} metros` : `Mais provável ${fmt(d.media)} metros; deve ficar entre ${fmt(d.min)} e ${fmt(d.max)}`;
+      const faixa = po && po.min != null
+        ? `<span class="faixa-prov" style="left:${x(po.min)};width:calc(${x(po.max)} - ${x(po.min)})"></span>`
+        : i === 0 || distante || d.min == null ? "" : `<span class="faixa-prov" style="left:${x(d.min)};width:calc(${x(d.max)} - ${x(d.min)})"></span>`;
+      const rotulo = po ? `Agora: ${fmt(n)} metros. Previsto ontem: ${fmt(po.media)} metros, entre ${fmt(po.min)} e ${fmt(po.max)}` : i === 0 ? `Agora: ${fmt(n)} metros` : distante ? `Tendência: perto de ${fmt(d.media, 1)} metros` : `Mais provável ${fmt(d.media)} metros; deve ficar entre ${fmt(d.min)} e ${fmt(d.max)}`;
       const entre = i === 0 || distante || d.min == null ? "" : `<small class="entre">mais provável entre ${fmt(d.min, 1)} e ${fmt(d.max, 1)} m</small>`;
       return `<li class="impacto${i === 0 ? " hoje" : ""}" data-risco="${risco}">
         <div class="impacto-dia">${nome}<small>${dataCurta(d.data)}</small></div>
         <div class="impacto-chuva">${icone}<span>${d.chuva_mm != null ? `${fmt(d.chuva_mm, 0)} mm` : "–"}<small>${palavraChuva(d.chuva_mm, d.prob)}</small></span></div>
-        <div class="alcance${distante ? " so-tendencia" : ""}" role="img" aria-label="${rotulo}" style="background:${fundo}">${faixa}<span class="media" style="left:${x(i === 0 ? n : d.media)}"></span></div>
+        <div class="alcance${distante ? " so-tendencia" : ""}" role="img" aria-label="${rotulo}" style="background:${fundo}">${faixa}<span class="media" style="left:${x(po ? po.media : i === 0 ? n : d.media)}"></span>${po ? `<span class="agora-ponto" style="left:${x(n)}" title="Agora: ${fmt(n)} m"></span>` : ""}</div>
         <p class="impacto-texto">${texto}${entre}</p>
       </li>`;
     }).join("");
@@ -1095,18 +1108,41 @@
   }
 
   // ------------------------------------------------------------ navegação
+  // ------------------------------------------------------------ abas
+  const ABAS = ["agora", "previsao", "historico", "emergencia"];
+  const APELIDOS = { boletim: "agora", proximos: "previsao" }; // endereços antigos
+  let abaAtual = "agora";
+
+  function renderAba(nome) {
+    if (nome === "agora") renderImpactos();
+    if (nome === "previsao") { renderRioAcima(); mostrarGrafico(graficoAtivo); renderTempo(); renderPlacar(); }
+    if (nome === "historico") { renderRegua(); renderHistorico(); }
+    if (nome === "emergencia") renderPlano();
+  }
+
+  function abrirAba(nome, rolar = true) {
+    nome = APELIDOS[nome] || nome;
+    if (!ABAS.includes(nome)) nome = "agora";
+    abaAtual = nome;
+    ABAS.forEach((a) => { $(`#${a}`).hidden = a !== nome; });
+    $$(".atalhos a[data-aba]").forEach((l) => {
+      const ativa = l.dataset.aba === nome;
+      l.classList.toggle("ativo", ativa);
+      l.setAttribute("aria-selected", ativa);
+      if (ativa) l.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+    renderAba(nome);
+    if (location.hash !== `#${nome}`) history.replaceState(null, "", `#${nome}`);
+    if (rolar) window.scrollTo({ top: 0, behavior: "instant" in document.documentElement.style ? "instant" : "auto" });
+  }
+
   function renderTudo() {
     renderTopo();
     renderAgora();
-    renderImpactos();
-    renderRioAcima();
-    mostrarGrafico(graficoAtivo);
-    renderTempo();
     renderPorque();
-    renderPlacar();
-    renderHistorico();
     renderEmergencia();
     renderRodape();
+    renderAba(abaAtual);
   }
 
   function ligarEventos() {
@@ -1132,19 +1168,16 @@
     });
 
     let espera;
-    window.addEventListener("resize", () => { clearTimeout(espera); espera = setTimeout(renderRegua, 150); });
+    window.addEventListener("resize", () => {
+      clearTimeout(espera);
+      espera = setTimeout(() => { if (abaAtual === "historico") renderRegua(); if (abaAtual === "agora") renderImpactos(); }, 150);
+    });
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderTudo);
 
-    // destaca no menu a seção que está na tela
-    if ("IntersectionObserver" in window) {
-      const links = $$(".atalhos a");
-      const obs = new IntersectionObserver((itens) => {
-        itens.forEach((it) => {
-          if (it.isIntersecting) links.forEach((l) => l.classList.toggle("ativo", l.getAttribute("href") === `#${it.target.id}`));
-        });
-      }, { rootMargin: "-45% 0px -50% 0px" });
-      $$("main > section").forEach((sec) => obs.observe(sec));
-    }
+    // abas: clique no menu e endereço (#agora, #previsao...) na barra
+    $$(".atalhos a[data-aba]").forEach((l) => l.addEventListener("click", (ev) => { ev.preventDefault(); abrirAba(l.dataset.aba); }));
+    window.addEventListener("hashchange", () => abrirAba(location.hash.slice(1), false));
+    $$('a[href="#agora"]').forEach((l) => l.addEventListener("click", (ev) => { ev.preventDefault(); abrirAba("agora"); }));
   }
 
   function mostrarErro(msg) {
@@ -1201,8 +1234,9 @@
     }
     if (typeof Chart !== "undefined") Chart.register(linhasPlugin);
     ligarEventos();
+    abaAtual = APELIDOS[location.hash.slice(1)] || (ABAS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "agora");
     renderTudo();
-    if (location.hash) $(location.hash)?.scrollIntoView();
+    abrirAba(abaAtual, false);
   }
 
 

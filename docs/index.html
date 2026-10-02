@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="estilo.css?v=2a584dbe">
+  <link rel="stylesheet" href="estilo.css?v=b4cebccc">
 </head>
 <body>
   <div id="demo-aviso" class="demo-aviso" hidden>Demonstração com dados fictícios. Não use para decisões reais.</div>
@@ -23,7 +23,7 @@
 
   <header class="tarja" id="tarja">
     <div class="tarja-linha">
-      <a class="marca" href="#boletim">
+      <a class="marca" href="#agora">
         <svg class="marca-icone" viewBox="0 0 32 32" aria-hidden="true"><rect x="10" y="2" width="12" height="28" class="i-esmalte"/><path d="M11 6h6M11 10h4M11 14h6" class="i-traco"/><rect x="11" y="18" width="10" height="11" class="i-agua"/></svg>
         <span><strong id="nome-app">Régua Viva</strong><small id="local"></small></span>
       </a>
@@ -32,11 +32,11 @@
         <a class="tarja-199" href="tel:199" aria-label="Ligar para a Defesa Civil, 199">Defesa Civil <b>199</b></a>
       </div>
     </div>
-    <nav class="atalhos" aria-label="Seções da página">
-      <a href="#boletim">Agora</a>
-      <a href="#proximos">Próximos dias</a>
-      <a href="#historico">Histórico</a>
-      <a href="#emergencia">Se a água subir</a>
+    <nav class="atalhos" aria-label="Seções do site" role="tablist">
+      <a href="#agora" role="tab" data-aba="agora">Agora</a>
+      <a href="#previsao" role="tab" data-aba="previsao">Previsão</a>
+      <a href="#historico" role="tab" data-aba="historico"><span class="longo">Régua e histórico</span><span class="curto">Histórico</span></a>
+      <a href="#emergencia" role="tab" data-aba="emergencia"><span class="longo">Em caso de enchente</span><span class="curto">Emergência</span></a>
       <label id="seletor-cidade-rotulo" class="seletor" hidden><span class="sr">Cidade</span><select id="seletor-cidade"></select></label>
     </nav>
   </header>
@@ -45,7 +45,7 @@
     <p id="erro" class="erro" hidden></p>
 
     <!-- 1. BOLETIM -->
-    <section id="boletim" class="secao secao-boletim" aria-labelledby="manchete">
+    <section id="agora" class="secao secao-boletim" role="tabpanel" aria-labelledby="manchete">
       <p class="boletim-hora" id="boletim-hora"></p>
       <h1 class="manchete" id="manchete"></h1>
       <p class="submanchete" id="submanchete"></p>
@@ -77,22 +77,23 @@
           <p class="dica-instalar" id="dica-instalar" hidden>No iPhone: toque em <strong>Compartilhar</strong> (o quadrado com a seta, embaixo) e depois em <strong>Adicionar à Tela de Início</strong>.</p>
         </div>
 
-        <figure class="regua-bloco">
-          <figcaption>A régua da cidade: em escala, com a água na altura de agora.</figcaption>
-          <div class="regua" id="regua"></div>
-        </figure>
+        <div class="coluna-proximos">
+        <h2 class="titulo-coluna">Próximos dias</h2>
+        <p class="secao-nota">A barra azul mostra onde o rio deve ficar em cada dia. Se ela entra nas cores, o rio pode chegar às faixas de alerta da Defesa Civil. Do 4º dia em diante, a previsão de chuva ainda muda muito: o site mostra só a tendência.</p>
+        <p class="legenda" aria-hidden="true">
+          <span><i class="leg-faixa"></i> onde o rio deve ficar (faixa mais provável, até 3 dias)</span>
+          <span><i class="leg-media"></i> valor mais provável</span>
+          <span><i class="leg-agora"></i> nível de agora (na linha de hoje, sobre o que foi previsto ontem)</span>
+        </p>
+        <ol class="impactos" id="impactos"></ol>
+        </div>
       </div>
     </section>
 
     <!-- 2. PRÓXIMOS DIAS -->
-    <section id="proximos" class="secao" aria-labelledby="t-proximos">
-      <h2 id="t-proximos">Próximos dias</h2>
-      <p class="secao-nota">A barra azul mostra onde o rio deve ficar em cada dia. Se ela entra nas cores, o rio pode chegar às faixas de alerta da Defesa Civil. Do 4º dia em diante, a previsão de chuva ainda muda muito: o site mostra só a tendência.</p>
-      <p class="legenda" aria-hidden="true">
-        <span><i class="leg-faixa"></i> onde o rio deve ficar (faixa mais provável, até 3 dias)</span>
-        <span><i class="leg-media"></i> valor mais provável</span>
-      </p>
-      <ol class="impactos" id="impactos"></ol>
+    <section id="previsao" class="secao" role="tabpanel" aria-labelledby="t-proximos" hidden>
+      <h2 id="t-proximos">Previsão em detalhe</h2>
+      <p class="secao-nota">De onde vem a previsão, como ela tem se saído e o tempo na bacia agora.</p>
 
       <figure class="rio-acima" id="rio-acima" hidden>
         <figcaption>
@@ -162,8 +163,15 @@
     </section>
 
     <!-- 3. HISTÓRICO -->
-    <section id="historico" class="secao" aria-labelledby="t-historico">
-      <h2 id="t-historico">Histórico</h2>
+    <section id="historico" class="secao" role="tabpanel" aria-labelledby="t-historico" hidden>
+      <h2 id="t-historico">Régua e histórico</h2>
+      <div class="subsecao subsecao-primeira">
+        <h3>A régua da cidade</h3>
+        <p class="secao-nota">Em escala, com a água na altura de agora e o que acontece na cidade em cada nível.</p>
+        <figure class="regua-bloco">
+          <div class="regua" id="regua"></div>
+        </figure>
+      </div>
       <div class="subsecao">
         <div class="subsecao-topo">
           <h3>O rio nos últimos dias</h3>
@@ -203,8 +211,8 @@
     </section>
 
     <!-- 4. SE A ÁGUA SUBIR -->
-    <section id="emergencia" class="secao" aria-labelledby="t-emergencia">
-      <h2 id="t-emergencia">Se a água subir</h2>
+    <section id="emergencia" class="secao" role="tabpanel" aria-labelledby="t-emergencia" hidden>
+      <h2 id="t-emergencia">O que fazer em caso de enchente</h2>
       <ul class="telefones">
         <li><a href="tel:199"><b>199</b><span>Defesa Civil</span></a></li>
         <li><a href="tel:193"><b>193</b><span>Bombeiros</span></a></li>
@@ -237,6 +245,6 @@
   <footer class="rodape" id="rodape"></footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
-  <script src="app.js?v=0613d9d8"></script>
+  <script src="app.js?v=8e1f561f"></script>
 </body>
 </html>
