@@ -437,3 +437,27 @@ def test_hoje_mostra_o_que_foi_previsto_ontem():
     hoje = saida["previsao_dias"][0]
     assert hoje["previsto_ontem"] == {"media": 4.8, "min": 4.6, "max": 5.0, "emitida": f"{ontem}T07:10"}
     assert hoje["atual"] is True   # a leitura de agora continua disponível para comparar
+
+
+def test_correcao_da_chuva_prevista():
+    from coletor.processar import comparar_chuva
+    hoje = dt.date(2026, 10, 20)
+    previsoes, obs = {}, {}
+    for i in range(10):
+        dia = hoje - dt.timedelta(days=12 - i)
+        previsoes[dia.isoformat()] = {"dias": [{"data": (dia + dt.timedelta(days=k + 1)).isoformat(), "chuva_mm": 20.0} for k in range(3)]}
+        obs[(dia + dt.timedelta(days=1)).isoformat()] = 8.0
+    for k in range(1, 4):
+        obs[(hoje - dt.timedelta(days=12 - 9 - k)).isoformat()] = 8.0
+    r = comparar_chuva(previsoes, obs, hoje)
+    assert r["n"] >= 15 and r["fator"] == 0.5          # previa 20, caíram 8: limita em 0,5
+    assert comparar_chuva(previsoes, obs, hoje, desde="2026-10-19")["fator"] is None   # poucos casos: não corrige
+
+
+def test_placar_so_conta_a_versao_atual():
+    from coletor.processar import placar
+    medias = {dt.date(2026, 10, d): 4.0 for d in range(1, 10)}
+    prev = {"2026-10-01": {"nivel_atual": 4.0, "dias": [{"data": "2026-10-02", "media": 9.0, "min": 8, "max": 10}]},
+            "2026-10-05": {"nivel_atual": 4.0, "dias": [{"data": "2026-10-06", "media": 4.1, "min": 3.9, "max": 4.3}]}}
+    r = placar(prev, medias, dt.date(2026, 10, 9), desde="2026-10-03")
+    assert r["horizontes"][0]["n"] == 1 and abs(r["horizontes"][0]["erro_medio"] - 0.1) < 1e-9
