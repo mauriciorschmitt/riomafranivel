@@ -244,7 +244,9 @@
       "resposta_amanha": 0.015,
       "resposta_hoje": 0.035,
       "resposta_ontem": 0.02
-    }
+    },
+    "placar_desde": "2026-10-03",
+    "_nota_placar": "placar_desde: o placar só conta previsões feitas a partir desta data (versão atual do modelo). Troque quando o modelo mudar."
   },
   "alertas": {
     "telegram_canal": ""
@@ -282,6 +284,14 @@
       },
       {
         "cidade": "Rio Negro (PR)",
+        "nome": "Ginásio XV de Novembro (Vila Militar)",
+        "endereco": "Praça Santo Ângelo",
+        "capacidade": 2000,
+        "obs": "Acesso para pessoas com deficiência",
+        "mapa": ""
+      },
+      {
+        "cidade": "Rio Negro (PR)",
         "nome": "Associação de Moradores do Bairro Passa Três",
         "endereco": "Rua Ludovico Schuster",
         "capacidade": 200,
@@ -300,7 +310,7 @@
         "cidade": "Mafra (SC)",
         "ordem": 1,
         "nome": "CEMMA (Centro de Educação do Município de Mafra)",
-        "endereco": "R. Me. Inês, 170 - Centro II Alto de Mafra, Mafra - SC, 89300-000",
+        "endereco": "",
         "capacidade": null,
         "obs": "",
         "mapa": "https://maps.app.goo.gl/7yQvdrEktErphsZY9"
@@ -309,7 +319,7 @@
         "cidade": "Mafra (SC)",
         "ordem": 2,
         "nome": "EEB Professor Mário de Oliveira Goeldner",
-        "endereco": "R. Gov. Jorge Lacerda, 234 - Vila Ferroviaria, Mafra - SC, 89300-000",
+        "endereco": "",
         "capacidade": null,
         "obs": "",
         "mapa": "https://maps.app.goo.gl/R7nFoozCdXggKtU5A"
@@ -318,7 +328,7 @@
         "cidade": "Mafra (SC)",
         "ordem": 3,
         "nome": "EEB Dr. Francisco Isabel",
-        "endereco": "Av. Cel. Severiano Maia - Jardim América, Mafra - SC, 89300-000",
+        "endereco": "",
         "capacidade": null,
         "obs": "",
         "mapa": "https://maps.app.goo.gl/eNvTtuGJ4BFATEfVA"
