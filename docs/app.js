@@ -794,6 +794,12 @@
       partes.push(`<p class="placar-teste"><strong>No teste com o passado</strong> (${v.n_dias} dias, de ${ini ? dataCurta(ini) + "/" + ini.slice(0, 4) : "?"} a ${fim ? dataCurta(fim) + "/" + fim.slice(0, 4) : "?"}), a previsão para o dia seguinte errou em média ${cm(v.erro_medio[0])}. O palpite "amanhã o rio fica igual a hoje" errou ${cm(v.erro_palpite[0])}. Esse teste usa a chuva que de fato caiu; com a chuva prevista, o erro real tende a ser um pouco maior. É isso que o placar abaixo mede.</p>`);
     }
     const p = D.placar;
+    if (p?.versao_desde) partes.push(`<p class="placar-teste"><strong>Placar ao vivo da versão atual</strong>, com previsões feitas desde ${dataCurta(p.versao_desde)}. Versões anteriores não entram na conta.</p>`);
+    const c = p?.chuva;
+    if (c?.n) {
+      partes.push(`<p class="placar-teste"><strong>Chuva prevista x chuva que caiu:</strong> nas ${c.n} comparações (previsões de 1 a 3 dias), o previsto somou ${fmt(c.prevista_mm, 0)} mm e caíram ${fmt(c.caiu_mm, 0)} mm. ${
+        c.fator ? `Como a previsão de chuva costuma errar para o mesmo lado aqui, ela é multiplicada por ${fmt(c.fator)} antes de entrar no modelo.` : "Com 15 comparações, o site passa a corrigir sozinho esse erro da chuva prevista."}</p>`);
+    }
     const h = (p?.horizontes || []).filter((x) => x.n > 0);
     if (!h.length) {
       partes.push(`<p class="placar-vazio">O placar ao vivo começa a encher amanhã: a primeira previsão ${p?.desde ? `foi guardada em ${dataCurta(p.desde)}` : "é guardada hoje às 7h"}. Com algumas semanas dá para tirar conclusões; com a próxima cheia, dá para ver como ela se sai quando mais importa.</p>`);

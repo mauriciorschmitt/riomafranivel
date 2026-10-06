@@ -116,6 +116,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 20px 48px; }
 .subsecao-primeira { margin-top: 12px; border-top: 0; padding-top: 0; }
 .titulo-coluna { font: 800 1.8rem/1 var(--fonte-numero); text-transform: uppercase; letter-spacing: 0.01em; margin-bottom: 6px; }
 .coluna-proximos { min-width: 0; }
+.selo-teste { display: inline-block; vertical-align: middle; margin-left: 8px; font: 800 0.8rem/1 var(--fonte-numero); letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 8px; border: 2px dashed var(--alerta); color: var(--alerta); }
 .secao > h2 { font: 800 2.4rem/1 var(--fonte-numero); text-transform: uppercase; letter-spacing: 0.01em; margin-bottom: 8px; }
 .secao-nota { color: var(--tinta-suave); font-size: 0.95rem; max-width: 74ch; }
 .subsecao { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--linha); }

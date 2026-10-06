@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="estilo.css?v=7ded40cc">
+  <link rel="stylesheet" href="estilo.css?v=b4cebccc">
 </head>
 <body>
   <div id="demo-aviso" class="demo-aviso" hidden>Demonstração com dados fictícios. Não use para decisões reais.</div>
@@ -78,7 +78,7 @@
         </div>
 
         <div class="coluna-proximos">
-        <h2 class="titulo-coluna">Próximos dias</h2>
+        <h2 class="titulo-coluna">Próximos dias <span class="selo-teste" title="A previsão ainda está sendo avaliada pelo placar. O nível de agora é medido e confiável.">Previsão em teste</span></h2>
         <p class="secao-nota">A barra azul mostra onde o rio deve ficar em cada dia. Se ela entra nas cores, o rio pode chegar às faixas de alerta da Defesa Civil. Do 4º dia em diante, a previsão de chuva ainda muda muito: o site mostra só a tendência.</p>
         <p class="legenda" aria-hidden="true">
           <span><i class="leg-faixa"></i> onde o rio deve ficar (faixa mais provável, até 3 dias)</span>
@@ -92,7 +92,7 @@
 
     <!-- 2. PRÓXIMOS DIAS -->
     <section id="previsao" class="secao" role="tabpanel" aria-labelledby="t-proximos" hidden>
-      <h2 id="t-proximos">Previsão em detalhe</h2>
+      <h2 id="t-proximos">Previsão em detalhe <span class="selo-teste">Em teste</span></h2>
       <p class="secao-nota">De onde vem a previsão, como ela tem se saído e o tempo na bacia agora.</p>
 
       <figure class="rio-acima" id="rio-acima" hidden>
@@ -245,6 +245,6 @@
   <footer class="rodape" id="rodape"></footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
-  <script src="app.js?v=abc0454b"></script>
+  <script src="app.js?v=8e1f561f"></script>
 </body>
 </html>
