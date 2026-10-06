@@ -277,18 +277,10 @@
       {
         "cidade": "Rio Negro (PR)",
         "nome": "Ginásio de Esportes José Muller",
-        "endereco": "",
-        "capacidade": null,
-        "obs": "",
-        "mapa": "https://maps.app.goo.gl/a3uD33T4ySoXHfpu6"
-      },
-      {
-        "cidade": "Rio Negro (PR)",
-        "nome": "Ginásio XV de Novembro (Vila Militar)",
         "endereco": "Praça Santo Ângelo",
         "capacidade": 2000,
         "obs": "Acesso para pessoas com deficiência",
-        "mapa": ""
+        "mapa": "https://maps.app.goo.gl/a3uD33T4ySoXHfpu6"
       },
       {
         "cidade": "Rio Negro (PR)",
