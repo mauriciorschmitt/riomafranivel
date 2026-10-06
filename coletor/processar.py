@@ -91,8 +91,36 @@ def _classificar(valor, limites, rotulos):
 
 
 # ---------------------------------------------------------------- principal
-def placar(previsoes: dict, medias_diarias: dict, hoje: dt.date) -> dict:
-    """Compara as previsões guardadas (uma por dia) com a média observada de cada dia."""
+MIN_COMPARACOES_CHUVA = 15
+
+
+def comparar_chuva(previsoes: dict, chuva_obs: dict, hoje: dt.date, desde: str = "") -> dict:
+    """Chuva prevista (1 a 3 dias antes) x chuva que caiu, das previsões guardadas às 7h."""
+    prevista = caiu = 0.0
+    n = 0
+    for emitida, prev in previsoes.items():
+        if emitida < desde:
+            continue
+        for d in prev.get("dias", [])[:3]:
+            data = d.get("data")
+            if d.get("chuva_mm") is None or data is None or data >= hoje.isoformat() or data not in chuva_obs:
+                continue
+            prevista += d["chuva_mm"]
+            caiu += chuva_obs[data] or 0.0
+            n += 1
+    fator = None
+    if n >= MIN_COMPARACOES_CHUVA and prevista > 5:
+        fator = round(min(1.5, max(0.5, caiu / prevista)), 2)
+    return {"n": n, "prevista_mm": round(prevista, 1), "caiu_mm": round(caiu, 1), "fator": fator}
+
+
+def placar(previsoes: dict, medias_diarias: dict, hoje: dt.date, desde: str = "") -> dict:
+    """Compara as previsões guardadas (uma por dia) com a média observada de cada dia.
+
+    `desde`: só conta previsões feitas a partir dessa data (a versão atual do modelo),
+    para o placar não misturar versões antigas com a de agora.
+    """
+    previsoes = {k: v for k, v in previsoes.items() if k >= desde}
     horizontes = []
     pares_1d, pares_3d = {}, {}
     for k in range(7):
@@ -161,6 +189,11 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
     # versões da chuva: a chuva mostrada e usada nos próximos dias é a mediana delas,
     # que muda pouco de uma rodada para outra (a previsão "principal" oscila bastante)
     conjunto = bruto.get("chuva_conjunto") or []
+    desde = str(config.get("previsao", {}).get("placar_desde") or "")
+    correcao = comparar_chuva(bruto.get("previsoes") or {}, bruto.get("chuva_historica") or {}, hoje, desde)
+    if correcao["fator"] and conjunto:
+        # a previsão de chuva costuma errar sempre para o mesmo lado aqui: desconta isso
+        conjunto = [{d: round(v * correcao["fator"], 1) for d, v in c.items()} for c in conjunto]
     chuva_mediana: dict[str, float] = {}
     if len(conjunto) >= mod.MIN_CENARIOS:
         futuras = sorted({d for c in conjunto for d in c if d > hoje.isoformat()})
@@ -312,7 +345,7 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
         "serie_diaria_media": [
             [d.isoformat(), round(v, 2)] for d, v in medias_diarias.items() if d >= hoje - dt.timedelta(days=30)
         ],
-        "placar": placar(bruto.get("previsoes") or {}, medias_diarias, hoje),
+        "placar": {**placar(bruto.get("previsoes") or {}, medias_diarias, hoje, desde), "versao_desde": desde or None, "chuva": correcao},
         "cenarios_chuva": diaria[0].get("cenarios") if diaria else None,
         "chuva_diaria": chuva_diaria,
         "previsao_horaria": horaria,
