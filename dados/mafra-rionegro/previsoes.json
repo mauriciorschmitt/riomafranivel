@@ -1142,5 +1142,74 @@
         "chuva_principal_mm": 1.2
       }
     ]
+  },
+  "2026-10-14": {
+    "emitida": "2026-10-14T07:00",
+    "nivel_atual": 6.83,
+    "dias": [
+      {
+        "data": "2026-10-15",
+        "media": 6.51,
+        "min": 6.42,
+        "max": 6.74,
+        "prob_inundacao": 0.143,
+        "chuva_mm": 11.9,
+        "chuva_principal_mm": 11.3
+      },
+      {
+        "data": "2026-10-16",
+        "media": 6.28,
+        "min": 6.04,
+        "max": 7.04,
+        "prob_inundacao": 0.26,
+        "chuva_mm": 3.0,
+        "chuva_principal_mm": 2.5
+      },
+      {
+        "data": "2026-10-17",
+        "media": 6.0,
+        "min": 5.62,
+        "max": 6.99,
+        "prob_inundacao": 0.249,
+        "chuva_mm": 0.0,
+        "chuva_principal_mm": 0.0
+      },
+      {
+        "data": "2026-10-18",
+        "media": 5.48,
+        "min": 5.01,
+        "max": 6.48,
+        "prob_inundacao": 0.172,
+        "chuva_mm": 0.1,
+        "chuva_principal_mm": 0.1
+      },
+      {
+        "data": "2026-10-19",
+        "media": 4.75,
+        "min": 4.23,
+        "max": 5.74,
+        "prob_inundacao": 0.071,
+        "chuva_mm": 0.8,
+        "chuva_principal_mm": 1.2
+      },
+      {
+        "data": "2026-10-20",
+        "media": 4.07,
+        "min": 3.55,
+        "max": 5.07,
+        "prob_inundacao": 0.021,
+        "chuva_mm": 1.7,
+        "chuva_principal_mm": 1.1
+      },
+      {
+        "data": "2026-10-21",
+        "media": 3.66,
+        "min": 3.03,
+        "max": 4.65,
+        "prob_inundacao": 0.023,
+        "chuva_mm": 3.3,
+        "chuva_principal_mm": 40.7
+      }
+    ]
   }
 }
