@@ -347,20 +347,37 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 20px 48px; }
 .abrigos li .botao-pequeno { margin-top: 6px; }
 .abrigos > div > .botao-pequeno { margin-top: 10px; }
 .botao-pequeno { display: inline-block; font-size: 0.85rem; padding: 5px 10px; }
-.plano-folha { overflow-wrap: anywhere; border: 2px dashed var(--tinta); padding: 18px; margin-top: 12px; background: var(--papel); display: grid; gap: 14px; }
-.plano-folha h4 { margin: 0; font: 800 1.5rem var(--fonte-numero); text-transform: uppercase; }
-.plano-campo { display: grid; grid-template-columns: 220px 1fr; gap: 12px; align-items: end; }
-.plano-campo input, .plano-campo textarea, .plano-campo select { font: inherit; color: var(--tinta); background: transparent; border: 0; border-bottom: 1px solid var(--tinta); border-radius: 0; padding: 6px 2px; width: 100%; min-height: 2.2em; }
-.plano-campo textarea { resize: vertical; min-height: 3.2em; }
-.plano-campo input:focus, .plano-campo textarea:focus, .plano-campo select:focus { outline: 2px solid var(--agua); outline-offset: 2px; }
-.plano-ajuda { display: block; font-weight: 400; font-size: 0.85rem; color: var(--tinta-fraca); }
-.plano-mochila { list-style: none; padding: 0; columns: 2 220px; margin: 6px 0 0; }
-.plano-mochila li { break-inside: avoid; padding: 4px 0; }
-.plano-mochila label { display: flex; gap: 10px; align-items: center; cursor: pointer; }
-.plano-mochila input { width: 22px; height: 22px; accent-color: var(--agua); }
+/* plano da família: passos numerados, como placas */
+.plano-form { border: 3px solid var(--tinta); background: var(--papel); margin-top: 12px; overflow-wrap: anywhere; }
+.plano-cabeca { background: var(--tarja); color: var(--tarja-texto); padding: 16px 18px 18px; display: grid; gap: 10px; }
+.plano-cabeca h4 { margin: 0; font: 800 1.7rem/1 var(--fonte-numero); text-transform: uppercase; letter-spacing: 0.02em; }
+.plano-cabeca input { font: 700 1.15rem var(--fonte); color: var(--tarja-texto); background: transparent; border: 0; border-bottom: 2px solid var(--tarja-texto); border-radius: 0; padding: 6px 0; width: 100%; }
+.plano-cabeca input::placeholder { color: #A9B6BB; }
+.plano-passo { display: grid; grid-template-columns: 52px 1fr; gap: 14px; padding: 18px; border-top: 2px solid var(--tinta); }
+.passo-num { width: 52px; height: 52px; display: grid; place-items: center; background: var(--agua); color: #fff; font: 800 2.2rem/1 var(--fonte-numero); }
+.passo-corpo { display: grid; gap: 6px; min-width: 0; }
+.passo-corpo h4 { margin: 4px 0 4px; font: 800 1.4rem/1.1 var(--fonte-numero); text-transform: uppercase; letter-spacing: 0.03em; }
+.passo-corpo > label:not(.sr) { font-weight: 700; margin-top: 6px; }
+.plano-form input[type="text"], .plano-form select, .plano-form textarea {
+  font: 400 1.08rem var(--fonte); color: var(--tinta); background: var(--fundo); border: 2px solid var(--tinta); border-radius: 0; padding: 10px 12px; width: 100%; min-height: 48px;
+}
+.plano-form textarea { resize: vertical; }
+.plano-form input:focus, .plano-form select:focus, .plano-form textarea:focus { outline: 3px solid var(--agua); outline-offset: 1px; }
+.plano-sair { display: flex; align-items: center; gap: 10px; }
+.plano-form .plano-sair input { max-width: 6.5em; font: 800 2rem var(--fonte-numero); padding: 4px 10px; }
+.plano-sair span { font: 800 2rem var(--fonte-numero); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: 700 0.98rem var(--fonte); color: var(--agua); background: transparent; border: 2px solid var(--agua); border-radius: 0; padding: 6px 12px; min-height: 40px; cursor: pointer; }
+.chip:hover, .chip:focus-visible { background: var(--agua); color: #fff; }
+.plano-info { margin: 2px 0 0; font-weight: 700; color: var(--agua); }
+.plano-ajuda { margin: 0; font-size: 0.9rem; color: var(--tinta-suave); }
+.mochila { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 4px; }
+.mochila-item { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 10px; border: 2px solid var(--linha); font-weight: 700; font-size: 0.95rem; line-height: 1.25; cursor: pointer; }
+.mochila-item input { width: 26px; height: 26px; flex: none; margin: 0; accent-color: var(--normal); }
+.mochila-item:has(input:checked) { border-color: var(--normal); background: color-mix(in srgb, var(--normal) 14%, transparent); }
+.plano-referencia { border-top: 2px solid var(--tinta); padding: 18px; display: grid; gap: 14px; font-size: 0.95rem; }
+.plano-referencia p { margin: 0; }
 .plano-acoes { margin-top: 12px; }
-.plano-campo span:first-child { font-weight: 700; }
-.plano-campo .linha-escrever { border-bottom: 1px solid var(--tinta); min-height: 1.6em; }
 .plano-lista { columns: 2 260px; margin: 0; padding-left: 1.2em; }
 .plano-lista li { padding: 2px 0; break-inside: avoid; }
 .plano-telefones { display: flex; flex-wrap: wrap; gap: 6px 22px; font-variant-numeric: tabular-nums; }
@@ -409,7 +426,8 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 20px 48px; }
   .grafico-alto { height: 300px; }
   .cheias-cabeca, .cheia { grid-template-columns: 92px 1fr; gap: 10px; }
   .cheia-info b { font-size: 1.3rem; }
-  .plano-campo { grid-template-columns: 1fr; gap: 4px; }
+  .plano-passo { grid-template-columns: 40px 1fr; gap: 12px; padding: 16px 14px; }
+  .passo-num { width: 40px; height: 40px; font-size: 1.8rem; }
   .marco-texto { font-size: 0.84rem; }
   .marco { padding: 5px 8px 5px 10px; }
 }
@@ -421,5 +439,10 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 20px 48px; }
   #emergencia > .subsecao:not(.plano), .plano-acoes, #orientacoes, .plano > .secao-nota { display: none !important; }
   #emergencia { border: 0; margin: 0; padding: 0; }
   .plano { border: 0; margin: 0; }
-  .plano-folha { border: 2px solid #000; }
+  .plano-form { border: 2px solid #000; }
+  .plano-cabeca { background: #fff; color: #000; border-bottom: 2px solid #000; }
+  .plano-cabeca input { color: #000; border-color: #000; }
+  .chips, .plano-ajuda { display: none !important; }
+  .plano-passo { break-inside: avoid; }
+  .passo-num { background: #000; }
 }

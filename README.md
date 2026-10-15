@@ -129,7 +129,9 @@ A página não tem API: o coletor imita os cliques (abrir a estação e pedir a 
 3. No GitHub, em **Settings > Secrets and variables > Actions**, crie `TELEGRAM_TOKEN`.
 4. Na configuração da cidade, preencha `"alertas": {"telegram_canal": "@seu_canal"}`.
 
-O bot avisa quando o rio muda de faixa (subindo ou descendo), e o botão "Receber alertas" aparece no painel.
+O bot avisa quando o rio muda de faixa (subindo ou descendo), com a **mesma imagem do boletim** do site e um texto curto embaixo, e o botão "Receber alertas" aparece no painel. Para conferir o canal: Actions > "Testar alerta no Telegram".
+
+A imagem é desenhada pelo próprio site (`docs/app.js`); para o alerta, o coletor abre o site num navegador sem tela (`coletor/cartao.py`, com Playwright), instalado no GitHub Actions só quando há alerta para mandar. Se a imagem falhar, o alerta vai só em texto.
 
 ## Estrutura
 

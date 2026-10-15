@@ -25,9 +25,17 @@ jobs:
           cache-dependency-path: coletor/requirements.txt
       - run: pip install -r coletor/requirements.txt
       - name: Coletar e publicar
+        run: python -m coletor.gerar --todas
+      # só quando o rio mudou de faixa: instala o navegador e manda o alerta com a imagem do boletim
+      - name: Alertas no Telegram
+        if: hashFiles('dados/*/alerta_pendente.json') != ''
+        continue-on-error: true  # alerta com problema não pode impedir de salvar os dados
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        run: python -m coletor.gerar --todas
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+          python -m coletor.alertas --pendentes
       - name: Salvar no repositório
         run: |
           git config user.name "monitor-cheias[bot]"

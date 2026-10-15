@@ -636,3 +636,34 @@ def test_mensagem_do_alerta():
     assert "subiu para" in subiu and "baixou para" in baixou
     assert "cm/h" not in subiu and "Defesa Civil 199" in subiu
     assert "está em" in alertas.mensagem(saida, None, teste=True)
+
+
+def test_alerta_fica_pendente_e_sai_com_a_imagem(tmp_path, monkeypatch):
+    from coletor import alertas
+    monkeypatch.setattr(base, "PASTA_DADOS", tmp_path / "dados")
+    monkeypatch.setattr(base, "PASTA_SITE", tmp_path / "site")
+    monkeypatch.setattr(base, "listar_cidades", lambda: ["mafra-rionegro"])
+    monkeypatch.setenv("TELEGRAM_TOKEN", "x")
+    cfg, agora, bruto, maximas, treino = _dados_demo()
+    saida = {**processar(cfg, bruto, mod.modelo_heuristico({}), maximas), "demo": False}
+    base.salvar_json(base.pasta("mafra-rionegro") / "alerta.json", {"status": "normal", "nivel": 1.0})
+    assert alertas.verificar("mafra-rionegro", saida) is True          # mudou de faixa: fica pendente
+    assert (base.pasta("mafra-rionegro") / alertas.ARQUIVO_PENDENTE).exists()
+    base.publicar("mafra-rionegro", saida)
+    enviados = []
+
+    class Resposta:
+        ok, status_code = True, 200
+
+    def post(url, **kw):
+        enviados.append((url.rsplit("/", 1)[1], kw))
+        return Resposta()
+    monkeypatch.setattr(alertas.requests, "post", post)
+    monkeypatch.setattr(alertas.cartao, "imagem_boletim", lambda slug: b"PNG")
+    assert alertas.enviar_pendentes() == 0
+    metodo, kw = enviados[0]
+    assert metodo == "sendPhoto" and kw["files"]["photo"][1] == b"PNG" and "subiu para" in kw["data"]["caption"]
+    assert not (base.pasta("mafra-rionegro") / alertas.ARQUIVO_PENDENTE).exists()   # não manda de novo
+    # sem imagem (navegador indisponível), vai em texto
+    monkeypatch.setattr(alertas.cartao, "imagem_boletim", lambda slug: None)
+    assert alertas.enviar(saida, "oi") and enviados[-1][0] == "sendMessage"
