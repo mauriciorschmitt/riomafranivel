@@ -72,7 +72,7 @@
     if (!semRede || !D) return;
     const minutos = minutosDesde(D.atual.hora);
     const ha = minutos < 90 ? `${minutos} min` : minutos < 2880 ? `${Math.round(minutos / 60)} horas` : `${Math.round(minutos / 1440)} dias`;
-    aviso.textContent = `Sem internet: mostrando o boletim das ${horaCurta(D.atual.hora)} de ${dataCurta(D.atual.hora)} (há ${ha}), guardado neste aparelho. Em risco, ligue 199.`;
+    aviso.textContent = `Sem internet ou sinal fraco: mostrando o boletim das ${horaCurta(D.atual.hora)} de ${dataCurta(D.atual.hora)} (há ${ha}), guardado neste aparelho. Em risco, ligue 199.`;
   }
 
   function montarSeletor(cidades, atual) {
