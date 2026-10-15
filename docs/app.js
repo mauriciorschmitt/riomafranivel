@@ -8,12 +8,29 @@
   const fmt = (n, casas = 2) =>
     n == null || Number.isNaN(n) ? "–" : Number(n).toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
   const pct = (p) => (p == null ? "–" : p < 0.01 && p > 0 ? "<1%" : `${Math.round(p * 100)}%`);
-  const dataLocal = (s) => new Date(s.length <= 10 ? `${s}T12:00` : s);
+  // Os horários do boletim são de Brasília (sem fuso no texto). Tudo é lido e mostrado nesse
+  // fuso, para quem estiver com o celular em outro (viagem, outro estado) ver o mesmo horário.
+  const FUSO = "America/Sao_Paulo";
+  const dataLocal = (s) => new Date(s.length <= 10 ? `${s}T12:00-03:00` : /([zZ]|[+-]\d\d:\d\d)$/.test(s) ? s : `${s}-03:00`);
   const SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
-  const naDia = (s) => { const d = dataLocal(s).getDay(); return `${d === 0 || d === 6 ? "no" : "na"} ${SEMANA[d]}`; };
   const SEMANA_CURTA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-  const dataCurta = (s) => dataLocal(s).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-  const dataLonga = (s) => dataLocal(s).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+  const diaSemana = (s) => { const [a, m, d] = s.slice(0, 10).split("-").map(Number); return new Date(Date.UTC(a, m - 1, d)).getUTCDay(); };
+  const hojeISO = () => new Intl.DateTimeFormat("en-CA", { timeZone: FUSO }).format(new Date());
+  const somarDias = (iso, n) => { const [a, m, d] = iso.split("-").map(Number); return new Date(Date.UTC(a, m - 1, d + n)).toISOString().slice(0, 10); };
+  // "hoje", "amanhã" ou "na sexta", pela data de verdade (não pela posição na lista)
+  const naDia = (s) => {
+    const dia = s.slice(0, 10), hoje = hojeISO();
+    if (dia === hoje) return "hoje";
+    if (dia === somarDias(hoje, 1)) return "amanhã";
+    const d = diaSemana(s);
+    return `${d === 0 || d === 6 ? "no" : "na"} ${SEMANA[d]}`;
+  };
+  const nomeDia = (s) => {
+    const dia = s.slice(0, 10), hoje = hojeISO();
+    return dia === hoje ? "Hoje" : dia === somarDias(hoje, 1) ? "Amanhã" : SEMANA_CURTA[diaSemana(s)];
+  };
+  const dataCurta = (s) => dataLocal(s).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: FUSO });
+  const dataLonga = (s) => dataLocal(s).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric", timeZone: FUSO });
   const hora = (s) => s.slice(11, 16);
   const css = (nome) => getComputedStyle(document.documentElement).getPropertyValue(nome).trim();
 
@@ -114,9 +131,8 @@
     tarja.innerHTML = `${fmt(D.atual.nivel)} m ${seta} <span class="faixa">${esc(st.nome)}</span>`;
     tarja.setAttribute("aria-label", `Nível do rio: ${fmt(D.atual.nivel)} metros, ${st.nome}`);
 
-    const quando = dataLocal(D.atual.hora);
     const el = $("#boletim-hora");
-    let texto = `Boletim das ${horaCurta(D.atual.hora)} de ${SEMANA[quando.getDay()]}, ${dataCurta(D.atual.hora)}. Estação ANA ${c.estacao.codigo}.`;
+    let texto = `Boletim das ${horaCurta(D.atual.hora)} de ${SEMANA[diaSemana(D.atual.hora)]}, ${dataCurta(D.atual.hora)}. Estação ANA ${c.estacao.codigo}.`;
     const minutos = minutosDesde(D.atual.hora);
     el.classList.remove("velho");
     if (D.demo) texto += " Dados fictícios de demonstração.";
@@ -178,26 +194,43 @@
     return (t < 0 ? "baixando" : "subindo") + (v >= 3 ? " rápido" : v < 1.5 ? " devagar" : "");
   }
 
+  // ------------------------------------------------------------ risco
+  // Uma só régua para todas as frases (manchete, próximos dias, "onde eu moro" e previsão),
+  // para o site não dizer "sem risco" num lugar e "pode chegar" em outro. As chances são de
+  // o PICO do dia passar da cota, e só valem até 3 dias à frente (depois, só tendência).
+  const CHANCE_MINIMA = 0.05;   // abaixo disso: não deve chegar
+  const CHANCE_RELEVANTE = 0.2; // a partir disso: pode chegar
+  const CHANCE_PROVAVEL = 0.5;  // a partir disso: deve chegar
+  const DIAS_COM_CHANCE = 3;
+  const chanceDe = (d, cota) => d?.prob_cotas?.[Number(cota).toFixed(2)] ?? (cota === inundacao() ? d?.prob_inundacao : null) ?? null;
+  function maiorChance(cota, dias = D.previsao_dias.slice(1, 1 + DIAS_COM_CHANCE)) {
+    return dias.reduce((m, d) => { const p = chanceDe(d, cota) ?? 0; return p > m.p ? { p, d } : m; }, { p: 0, d: dias[0] });
+  }
+  // "Deve chegar a X: chance de 60%.", "Pode chegar a X: chance de 25%.", "Chance pequena (8%) de chegar a X."
+  function fraseChance(p, acao, alvo) {
+    if (p >= CHANCE_PROVAVEL) return `Deve ${acao} ${alvo}: chance de ${pct(p)}.`;
+    if (p >= CHANCE_RELEVANTE) return `Pode ${acao} ${alvo}: chance de ${pct(p)}.`;
+    if (p >= CHANCE_MINIMA) return `Chance pequena (${pct(p)}) de ${acao} ${alvo}.`;
+    return null;
+  }
+
   function manchete() {
     const c = D.config, n = D.atual.nivel, cota = inundacao();
     const estado = estadoRio();
     const acima = cota != null && n >= cota;
     const titulo = acima ? `O ${c.rio} está acima da cota de inundação e ${estado}.` : `O ${c.rio} está ${estado}.`;
     const dias = D.previsao_dias.slice(1);
-    const maior = (arr) => arr.reduce((a, b) => ((b.prob_inundacao ?? 0) > (a.prob_inundacao ?? 0) ? b : a), arr[0]);
-    // porcentagem só até 3 dias à frente; depois disso a chuva prevista erra demais
-    const perto = maior(dias.slice(0, 3)), longe = maior(dias.slice(3));
-    const pPerto = perto?.prob_inundacao ?? 0;
-    const distantes = dias.slice(3);
+    const { p: pPerto, d: perto } = maiorChance(cota);
+    const distantes = dias.slice(DIAS_COM_CHANCE);
     const inicioAlerta = faixas()[0]?.cota ?? Infinity;
-    void longe;
+    const perto3 = pPerto >= CHANCE_MINIMA ? "Risco baixo de inundação" : "Sem risco de inundação";
     let sub;
     if (acima) sub = "Quem mora em área de risco deve seguir as orientações da Defesa Civil: <strong>199</strong>.";
-    else if (pPerto >= 0.2) sub = `<strong>Pode passar da cota de inundação (${fmt(cota)} m) ${naDia(perto.data)}</strong>: chance de ${pct(pPerto)}, contando com a chuva prevista.`;
+    else if (pPerto >= CHANCE_RELEVANTE) sub = `<strong>${pPerto >= CHANCE_PROVAVEL ? "Deve" : "Pode"} passar da cota de inundação (${fmt(cota)} m) ${naDia(perto.data)}</strong>: chance de ${pct(pPerto)}, contando com a chuva prevista.`;
     else if (distantes.some((d) => d.media >= inicioAlerta)) {
       const alto = distantes.reduce((a, b) => (b.media > a.media ? b : a));
-      sub = `Sem risco nos próximos 3 dias. <strong>Tendência de subida ${naDia(alto.data)}</strong>, se a chuva prevista se confirmar. A previsão fica mais segura mais perto da data.`;
-    } else if (pPerto >= 0.05) sub = "Risco baixo de inundação nos próximos 3 dias.";
+      sub = `${perto3} nos próximos 3 dias. <strong>Tendência de subida ${naDia(alto.data)}</strong>, se a chuva prevista se confirmar. A previsão fica mais segura mais perto da data.`;
+    } else if (pPerto >= CHANCE_MINIMA) sub = "Risco baixo de inundação nos próximos 3 dias.";
     else sub = "Sem risco de inundação previsto para os próximos 7 dias.";
     return [titulo, sub];
   }
@@ -265,22 +298,18 @@
     const n = D.atual.nivel;
     if (n >= e.cota) {
       el.classList.add("perigo");
-      el.innerHTML = `<strong>O rio já passou do nível em que ${esc(e.nome)} é atingido (${fmt(e.cota)} m).</strong> Siga as orientações da Defesa Civil: 199.`;
+      el.innerHTML = `<strong>${esc(e.nome)}: o rio já passou de ${fmt(e.cota)} m, o nível em que a água chega lá.</strong> Siga as orientações da Defesa Civil: 199.`;
       return;
     }
-    const chave = Number(e.cota).toFixed(2);
     const dias = D.previsao_dias.slice(1);
-    const melhor = dias.reduce((a, d) => ((d.prob_cotas?.[chave] ?? 0) > (a.prob_cotas?.[chave] ?? 0) ? d : a), dias[0]);
-    const p = melhor?.prob_cotas?.[chave];
-    const perto = dias.slice(0, 3).reduce((a, d) => ((d.prob_cotas?.[chave] ?? 0) > (a.prob_cotas?.[chave] ?? 0) ? d : a), dias[0]);
-    const pPerto = perto?.prob_cotas?.[chave] ?? 0;
-    let previsao = "";
-    if (p != null && p < 0.05) previsao = " Pela previsão, a água não chega lá nos próximos 7 dias.";
-    else if (pPerto >= 0.05) previsao = ` Chance de chegar lá nos próximos 3 dias: <strong>${pct(pPerto)}</strong>, maior ${naDia(perto.data)}.`;
-    else if (dias.slice(3).some((d) => d.media >= e.cota)) previsao = ` Nos próximos 3 dias, não. Depois, pela tendência, <strong>pode chegar lá se a chuva prevista se confirmar</strong>; a previsão fica mais segura mais perto da data.`;
-    else if (p != null) previsao = " Risco baixo nos próximos 7 dias.";
-    el.innerHTML = `<strong>${esc(e.nome)}</strong> começa a ser atingido com ${fmt(e.cota)} m. O rio está <strong>${fmt(e.cota - n)} m abaixo</strong> disso.${previsao}`;
-    if (pPerto >= 0.2) el.classList.add("perigo");
+    const { p: pPerto, d: perto } = maiorChance(e.cota);
+    const tendenciaChega = dias.slice(DIAS_COM_CHANCE).some((d) => d.media >= e.cota);
+    let previsao;
+    if (pPerto >= CHANCE_MINIMA) previsao = ` ${fraseChance(pPerto, "chegar lá", naDia(perto.data))}`;
+    else if (tendenciaChega) previsao = ` Nos próximos 3 dias, não. Depois, pela tendência, <strong>pode chegar lá se a chuva prevista se confirmar</strong>; a previsão fica mais segura mais perto da data.`;
+    else previsao = " Pela previsão, a água não chega lá nos próximos 7 dias.";
+    el.innerHTML = `<strong>${esc(e.nome)}</strong>: a água chega lá com ${fmt(e.cota)} m. O rio está <strong>${fmt(e.cota - n)} m abaixo</strong> disso.${previsao}`;
+    if (pPerto >= CHANCE_RELEVANTE) el.classList.add("perigo");
   }
 
   // ------------------------------------------------------------ régua
@@ -484,7 +513,7 @@
     destruir("48h");
     const obs = D.serie_horaria.slice(-25);
     const prev = D.previsao_horaria;
-    const rotulos = [...obs.map((p) => p[0]), ...prev.map((p) => p.hora)].map((s) => `${SEMANA_CURTA[dataLocal(s).getDay()]} ${hora(s)}`);
+    const rotulos = [...obs.map((p) => p[0]), ...prev.map((p) => p.hora)].map((s) => `${SEMANA_CURTA[diaSemana(s)]} ${hora(s)}`);
     const n = obs.length;
     const vazio = (k) => Array(k).fill(null);
     const observado = [...obs.map((p) => p[1]), ...vazio(prev.length)];
@@ -565,17 +594,17 @@
     const pico = futuros.reduce((a, b) => (b.media > a.media ? b : a), futuros[0]);
     const cotaInund = inundacao();
     let texto;
-    // chances só valem para os 3 primeiros dias
-    const riscoPerto = futuros.slice(0, 3).reduce((a, b) => ((b.prob_inundacao ?? 0) > (a.prob_inundacao ?? 0) ? b : a), futuros[0]);
-    if ((riscoPerto.prob_inundacao ?? 0) >= 0.2) {
-      texto = `Atenção: há ${pct(riscoPerto.prob_inundacao)} de chance de o rio passar de ${fmt(cotaInund)} m ${naDia(riscoPerto.data)} (${dataCurta(riscoPerto.data)}), contando com a chuva prevista.`;
-    } else if (futuros.slice(3).some((d) => d.media >= (faixas()[0]?.cota ?? Infinity))) {
-      const alto = futuros.slice(3).reduce((a, b) => (b.media > a.media ? b : a));
-      texto = `Nos próximos 3 dias, ${(riscoPerto.prob_inundacao ?? 0) >= 0.05 ? "risco baixo" : "sem risco"} de inundação. Depois, a tendência é de subida para perto de ${fmt(Math.round(alto.media * 2) / 2, 1)} m ${naDia(alto.data)}, se a chuva prevista se confirmar. A linha clara do gráfico é só tendência: a previsão de chuva desses dias ainda muda bastante.`;
+    const { p: pRisco, d: riscoPerto } = maiorChance(cotaInund);
+    const picoPerto = Math.max(...futuros.slice(0, DIAS_COM_CHANCE).map((d) => d.pico_max ?? d.max ?? d.media));
+    if (pRisco >= CHANCE_RELEVANTE) {
+      texto = `Atenção: há ${pct(pRisco)} de chance de o rio passar de ${fmt(cotaInund)} m ${naDia(riscoPerto.data)} (${dataCurta(riscoPerto.data)}), contando com a chuva prevista.`;
+    } else if (futuros.slice(DIAS_COM_CHANCE).some((d) => d.media >= (faixas()[0]?.cota ?? Infinity))) {
+      const alto = futuros.slice(DIAS_COM_CHANCE).reduce((a, b) => (b.media > a.media ? b : a));
+      texto = `Nos próximos 3 dias, ${pRisco >= CHANCE_MINIMA ? "risco baixo" : "sem risco"} de inundação. Depois, a tendência é de subida para perto de ${fmt(Math.round(alto.media * 2) / 2, 1)} m ${naDia(alto.data)}, se a chuva prevista se confirmar. A linha clara do gráfico é só tendência: a previsão de chuva desses dias ainda muda bastante.`;
     } else if (pico.media > agora + 0.15) {
       texto = `Com a chuva prevista, o rio deve voltar a subir e chegar perto de ${fmt(pico.media)} m ${naDia(pico.data)} (${dataCurta(pico.data)}), abaixo da cota de inundação.`;
     } else {
-      texto = `Sem subida importante prevista para os próximos 7 dias. Nível mais alto esperado: ${fmt(pico.media)} m.`;
+      texto = `Sem subida importante prevista para os próximos 7 dias. Nos próximos 3 dias, o mais provável é o rio ficar abaixo de ${fmt(picoPerto)} m${pRisco >= CHANCE_MINIMA ? `; risco baixo de inundação (chance de até ${pct(pRisco)})` : ""}.`;
     }
     $("#diag-7d").textContent = texto;
   }
@@ -616,8 +645,8 @@
     const possiveis = marcos
       .filter((m) => m.cota > n && m.cota >= inicioAlerta)
       .map((m) => ({ m, p: probs[Number(m.cota).toFixed(2)] ?? ((d.pico ?? d.media) >= m.cota ? 1 : 0) }))
-      // perto: vale mostrar possibilidades a partir de 10%; longe: só o que é provável (tendência)
-      .filter((o) => o.p >= (distante ? 0.4 : 0.1));
+      // perto: só o que já merece alerta (a mesma régua da manchete); longe: só o que é provável (tendência)
+      .filter((o) => o.p >= (distante ? 0.4 : CHANCE_RELEVANTE));
     let texto = `<span class="nivel">${fmt(d.media)} m</span>`;
     let risco = "normal";
     const alvo = possiveis.at(-1);
@@ -631,10 +660,10 @@
       texto = `<span class="nivel">~${fmt(perto, 1)} m</span>Tendência: ${direcao}${marco ? `, perto de <strong>${esc(marco.titulo)}</strong> (${fmt(marco.cota)} m)` : ""}${dif > 0.15 ? ", se a chuva prevista se confirmar" : ""}.`;
       return { risco: marco ? "atencao" : "normal", texto };
     } else if (alvo) {
-      texto += `${alvo.p >= 0.5 ? "Deve chegar a" : "Pode chegar a"} <strong>${esc(alvo.m.titulo)}</strong> (${fmt(alvo.m.cota)} m): chance de ${pct(alvo.p)}.`;
+      texto += fraseChance(alvo.p, "chegar a", `<strong>${fmt(alvo.m.cota)} m</strong> (${esc(alvo.m.titulo.charAt(0).toLowerCase() + alvo.m.titulo.slice(1))})`);
       // cor de alarme só quando a chance é relevante; possibilidade pequena fica só em negrito
       const st = statusDe(alvo.m.cota).id;
-      risco = alvo.p < 0.3 ? "baixo" : st === "normal" ? "atencao" : st;
+      risco = alvo.p < CHANCE_RELEVANTE ? "baixo" : st === "normal" ? "atencao" : st;
     } else {
       const atual = marcos.filter((m) => m.cota <= n).at(-1);
       texto += atual && (d.pico_max ?? d.max) < atual.cota
@@ -689,8 +718,7 @@
     </li>`;
 
     $("#impactos").innerHTML = cabeca + dias.map((d, i) => {
-      const dt = dataLocal(d.data);
-      const nome = i === 0 ? "Hoje" : i === 1 ? "Amanhã" : SEMANA_CURTA[dt.getDay()];
+      const nome = nomeDia(d.data);
       let { risco, texto } = impactoDoDia(d, i, marcos);
       const po = i === 0 ? d.previsto_ontem : null;
       if (po) {
@@ -738,8 +766,8 @@
     }
     if (f.montante) {
       const v = f.montante.variacao_24h;
-      const mudou = v == null ? "sem variação medida" : Math.abs(v) < 0.05 ? "estável nas últimas 24 horas" : `${v > 0 ? "subiu" : "baixou"} ${fmt(Math.abs(v))} m em 24 horas`;
-      partes.push(`Rio acima, em ${esc(f.montante.nome)}, o nível está ${mudou}.`);
+      const mudou = v == null ? "ainda não tem 24 horas de leituras" : Math.abs(v) < 0.05 ? "ficou estável nas últimas 24 horas" : `${v > 0 ? "subiu" : "baixou"} ${fmt(Math.abs(v))} m em 24 horas`;
+      partes.push(`Rio acima, em ${esc(f.montante.nome)}, o nível ${mudou}.`);
     }
     partes.push("O modelo junta tudo isso com o nível de agora e a velocidade com que o rio vem mudando.");
     $("#porque").innerHTML = partes.join(" ");
@@ -826,6 +854,15 @@
 
   const cm = (m) => (m == null ? "–" : `${Math.round(m * 100)} cm`);
 
+  // quando sai a primeira previsão guardada: hoje (antes das 7h) ou o próximo dia válido
+  function proximaGuarda(desde) {
+    const hoje = hojeISO();
+    const horaAgora = Number(new Intl.DateTimeFormat("en-GB", { timeZone: FUSO, hour: "2-digit", hourCycle: "h23" }).format(new Date()));
+    let dia = horaAgora < 7 ? hoje : somarDias(hoje, 1);
+    if (desde && desde > dia) dia = desde;
+    return naDia(dia);
+  }
+
   function renderPlacar() {
     destruir("placar");
     const el = $("#placar");
@@ -844,7 +881,7 @@
     }
     const h = (p?.horizontes || []).filter((x) => x.n > 0);
     if (!h.length) {
-      partes.push(`<p class="placar-vazio">O placar ao vivo começa a encher amanhã: a primeira previsão ${p?.desde ? `foi guardada em ${dataCurta(p.desde)}` : "é guardada hoje às 7h"}. Com algumas semanas dá para tirar conclusões; com a próxima cheia, dá para ver como ela se sai quando mais importa.</p>`);
+      partes.push(`<p class="placar-vazio">O placar ao vivo ainda está vazio: a primeira previsão ${p?.desde ? `foi guardada em ${dataCurta(p.desde)}` : `será guardada ${proximaGuarda(p?.versao_desde)} às 7h`} e é conferida no dia seguinte. Com algumas semanas dá para tirar conclusões; com a próxima cheia, dá para ver como ela se sai quando mais importa.</p>`);
       el.innerHTML = partes.join("");
       return;
     }
@@ -984,7 +1021,12 @@
   // ------------------------------------------------------------ emergência
   function renderEmergencia() {
     const ct = D.config.contatos || {};
-    const tel = (n) => `tel:${n.replace(/[^\d+]/g, "")}`;
+    // com +55 o número funciona em qualquer celular, de qualquer DDD; os curtos (199, 193) ficam como estão
+    const tel = (n) => {
+      const digitos = n.replace(/\D/g, "");
+      if (n.trim().startsWith("+")) return `tel:+${digitos}`;
+      return digitos.length < 10 ? `tel:${digitos}` : `tel:+55${digitos.replace(/^0+/, "")}`;
+    };
     const orgaos = (ct.orgaos || []).filter((o) => o.nome && (o.fixo || o.plantao));
     $("#bloco-orgaos").hidden = !orgaos.length;
     $("#orgaos").innerHTML = orgaos.map((o) => `<li><h4>${esc(o.nome)}</h4><p>${esc(o.descricao || "")}</p><div class="acoes">
@@ -1046,7 +1088,7 @@
       `<p>Nível: telemetria da Agência Nacional de Águas (ANA), estação ${esc(c.estacao.codigo)}${c.estacao.copel ? `, com reserva no Monitoramento Hidrológico da COPEL (${esc(c.estacao.copel)})` : ""}.${
         (c.montante || []).filter((m) => m.estacao_copel || m.codigo).map((m) => ` Rio acima: ${esc(m.nome)} (${m.estacao_copel ? "COPEL" : `ANA ${esc(m.codigo)}`}).`).join("")
       } Chuva, previsão do tempo e umidade do solo: Open-Meteo. Vazão prevista: GloFAS (Copernicus), via Open-Meteo. Dados de telemetria não consistidos.</p>`,
-      `<p>Página gerada em ${gerado.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}. Os dados são atualizados automaticamente a cada 30 minutos.</p>`,
+      `<p>Página gerada em ${gerado.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: FUSO })}. Os dados são atualizados automaticamente a cada 30 minutos.</p>`,
       `<p>Este painel é informativo e não substitui os alertas oficiais. Em situação de risco, siga a Defesa Civil.</p>`,
     ];
     if (c.repositorio) partes.push(`<p>Código aberto e gratuito: <a href="${esc(c.repositorio)}">${esc(c.repositorio.replace(/^https?:\/\//, ""))}</a>. Use na sua cidade.</p>`);
@@ -1132,7 +1174,7 @@
       D.previsao_dias.slice(1, 4).forEach((d, i) => {
         const x0 = 64 + i * 320;
         g.fillStyle = "#45535A"; g.font = cond(700, 38);
-        g.fillText(i === 0 ? "AMANHÃ" : SEMANA_CURTA[dataLocal(d.data).getDay()].toUpperCase(), x0, topoDias + 58);
+        g.fillText(nomeDia(d.data).toUpperCase(), x0, topoDias + 58);
         g.fillStyle = "#121A1E"; g.font = cond(800, 64); g.fillText(`${fmt(d.media)} m`, x0, topoDias + 124);
         g.fillStyle = "#45535A"; g.font = corpo(400, 26);
         if (d.min != null) g.fillText(`entre ${fmt(d.min, 1)} e ${fmt(d.max, 1)}`, x0, topoDias + 162);
