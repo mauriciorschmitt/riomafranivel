@@ -612,3 +612,16 @@ def test_modelo_hidrologico_entra_na_previsao():
     prev = mod.prever(combinado, hoje, niveis[hoje], niveis, chuva, cota_inundacao=7.0)
     assert len(prev) == 7 and all(p["min"] <= p["media"] <= p["max"] for p in prev)
     json.dumps(combinado)  # vai para o modelo.json
+
+
+def test_carimbo_igual_no_windows_e_no_linux(tmp_path, monkeypatch):
+    monkeypatch.setattr(base, "PASTA_SITE", tmp_path)
+    versoes = []
+    for fim in ("\n", "\r\n"):
+        (tmp_path / "index.html").write_bytes(f'<script src="app.js"></script>{fim}<p>x</p>{fim}'.encode())
+        (tmp_path / "app.js").write_bytes(f"console.log(1);{fim}console.log(2);{fim}".encode())
+        (tmp_path / "sw.js").write_bytes(b'const VERSAO = "0";\n')
+        base.carimbar_versao()
+        html = (tmp_path / "index.html").read_bytes().replace(b"\r\n", b"\n")
+        versoes.append((html, (tmp_path / "sw.js").read_bytes().replace(b"\r\n", b"\n")))
+    assert versoes[0] == versoes[1]
