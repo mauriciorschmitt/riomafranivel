@@ -63,13 +63,13 @@ def completar_chuva(slug, pontos, dias, hoje):
     return chuva
 
 
-def media_diaria(leituras, offset=0.0):
+def media_diaria(leituras, offset=0.0, funcao=statistics.fmean):
     grupos = defaultdict(list)
     for l in leituras:
         if l["nivel_m"] is not None:
             grupos[l["hora"].date()].append(l["nivel_m"] + offset)
-    # dias com poucas leituras distorcem a média
-    return {d: statistics.fmean(v) for d, v in grupos.items() if len(v) >= 8}
+    # dias com poucas leituras distorcem a média (e podem perder o pico)
+    return {d: funcao(v) for d, v in grupos.items() if len(v) >= 8}
 
 
 MIN_DIAS_ANO = 200  # ano com menos dias que isso não entra (a máxima pode ter caído num buraco)
@@ -161,6 +161,14 @@ def treinar_cidade(slug: str, baixar_historico: bool = False) -> dict:
             print(f"  {cfg_m['nome']} não melhorou a previsão; modelo segue só com chuva")
     else:
         modelo = mod.treinar(niveis, chuva, None, 0, cfg_prev)
+
+    if modelo["tipo"] == "calibrado":
+        maximas_dia = media_diaria(leituras, float(config["estacao"].get("offset_m", 0.0)), max)
+        pico = mod.treinar_pico(niveis, maximas_dia, chuva)
+        if pico:
+            modelo["pico"] = pico
+            print(f"  pico do dia: erro médio {pico['erro_medio']:.2f} m "
+                  f"(usar a média como pico erraria {pico['erro_sem_pico']:.2f} m)")
 
     base.salvar_json(base.pasta(slug) / "modelo.json", modelo)
     if modelo["tipo"] == "calibrado":

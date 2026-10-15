@@ -461,3 +461,94 @@ def test_placar_so_conta_a_versao_atual():
             "2026-10-05": {"nivel_atual": 4.0, "dias": [{"data": "2026-10-06", "media": 4.1, "min": 3.9, "max": 4.3}]}}
     r = placar(prev, medias, dt.date(2026, 10, 9), desde="2026-10-03")
     assert r["horizontes"][0]["n"] == 1 and abs(r["horizontes"][0]["erro_medio"] - 0.1) < 1e-9
+
+
+def _medias_e_maximas_demo():
+    from coletor import treinar
+    cfg, agora, bruto, maximas, treino = _dados_demo()
+    leituras = bruto["telemetria"]
+    return treino, treinar.media_diaria(leituras), treinar.media_diaria(leituras, funcao=max)
+
+
+def test_pico_do_dia_erra_menos_que_usar_a_media():
+    treino, medias, maximas_dia = _medias_e_maximas_demo()
+    pico = mod.treinar_pico(medias, maximas_dia, treino["chuva"])
+    assert pico is not None and pico["variaveis"] == mod.NOMES_PICO
+    assert pico["erro_medio"] < pico["erro_sem_pico"]
+    # subindo forte, o pico passa bem da média; parado, quase nada
+    subindo = mod.excesso_pico(pico, mod._vetor_pico(3.0, 4.5, 6.0, 40.0))
+    parado = mod.excesso_pico(pico, mod._vetor_pico(3.0, 3.0, 3.0, 0.0))
+    assert subindo > parado >= 0
+
+
+def test_previsao_traz_o_pico_e_a_chance_usa_o_pico():
+    cfg, agora, bruto, maximas, treino = _dados_demo()
+    _, medias, maximas_dia = _medias_e_maximas_demo()
+    modelo = mod.treinar(treino["niveis"], treino["chuva"])
+    modelo["pico"] = mod.treinar_pico(medias, maximas_dia, treino["chuva"])
+    hoje = agora.date()
+    chuva = dict(treino["chuva"])
+    for k in range(1, 4):
+        chuva[(hoje + dt.timedelta(days=k)).isoformat()] = 50.0
+    prev = mod.prever(modelo, hoje, 5.0, treino["niveis"], chuva, cota_inundacao=7.0, cotas_extras=[7.0])
+    for p in prev:
+        assert p["media"] <= p["pico"] and p["pico_min"] <= p["pico"] <= p["pico_max"]
+        assert p["prob_cotas"]["7.00"] == p["prob_inundacao"]
+    assert any(p["pico"] - p["media"] >= 0.05 for p in prev[:3])   # dias de subida: pico acima da média
+
+
+def test_vies_do_teste_retroativo_corrige_a_linha_central():
+    cfg, agora, bruto, maximas, treino = _dados_demo()
+    modelo = mod.treinar(treino["niveis"], treino["chuva"])
+    # o mesmo modelo, mas que "sempre ficou 1 m mais abaixo do rio" no teste retroativo
+    abaixo = {**modelo, "erros_validacao": [[[c, e - 1.0] for c, e in p] for p in modelo["erros_validacao"]]}
+    resto = (agora.date(), 5.0, treino["niveis"], treino["chuva"])
+    assert mod.prever(abaixo, *resto, correcao_vies=0.0) == mod.prever(modelo, *resto, correcao_vies=0.0)
+    ref = mod.prever(modelo, *resto, correcao_vies=1.0)
+    com = mod.prever(abaixo, *resto, correcao_vies=1.0)
+    for a, b in zip(ref, com):
+        assert abs(b["media"] - a["media"] - 1.0) < 0.02
+        assert b["min"] <= b["media"] <= b["max"]
+
+
+def test_fator_da_faixa_alarga_em_volta_da_linha_central():
+    cfg, agora, bruto, maximas, treino = _dados_demo()
+    modelo = mod.treinar(treino["niveis"], treino["chuva"])
+    args = (modelo, agora.date(), 5.0, treino["niveis"], treino["chuva"])
+    normal = mod.prever(*args)
+    larga = mod.prever(*args, fatores_faixa=[2.0] * 7)
+    for a, b in zip(normal, larga):
+        assert a["media"] == b["media"] and b["fator_faixa"] == 2.0
+        assert abs((b["max"] - b["media"]) - 2 * (a["max"] - a["media"])) < 0.03
+
+
+def test_calibra_a_faixa_pelo_placar():
+    from coletor.processar import calibrar_faixa
+    hoje = dt.date(2026, 11, 1)
+    medias, prev = {}, {}
+    for i in range(30):
+        alvo = hoje - dt.timedelta(days=30 - i)
+        medias[alvo] = 5.0
+        # faixa de ±0,2 m, mas o rio sempre ficou 0,6 m acima: 3 meias-faixas
+        prev[(alvo - dt.timedelta(days=1)).isoformat()] = {"nivel_atual": 5.0, "dias": [
+            {"data": alvo.isoformat(), "media": 4.4, "min": 4.2, "max": 4.6}]}
+    fatores = calibrar_faixa(prev, medias, hoje)
+    assert len(fatores) == 7 and 2.0 < fatores[0] <= 3.0
+    assert fatores == sorted(fatores)                          # não diminui com o horizonte
+    # a mesma situação com a faixa já alargada 3x: não alarga de novo
+    for p in prev.values():
+        p["dias"][0].update({"min": 3.8, "max": 5.0, "fator_faixa": 3.0})
+    assert 2.0 < calibrar_faixa(prev, medias, hoje)[0] <= 3.0
+    # poucas conferências: não mexe
+    poucas = dict(list(prev.items())[:3])
+    assert calibrar_faixa(poucas, medias, hoje)[0] == 1.0
+
+
+def test_placar_confere_o_pico():
+    from coletor.processar import placar
+    medias = {dt.date(2026, 10, 2): 6.0}
+    maximas = {dt.date(2026, 10, 2): 7.0}
+    prev = {"2026-10-01": {"nivel_atual": 5.0, "dias": [
+        {"data": "2026-10-02", "media": 5.9, "min": 5.7, "max": 6.1, "pico": 6.8}]}}
+    h = placar(prev, medias, dt.date(2026, 10, 5), maximas_diarias=maximas)["horizontes"][0]
+    assert h["n_pico"] == 1 and abs(h["erro_pico"] - 0.2) < 1e-9

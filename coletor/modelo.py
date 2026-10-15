@@ -227,6 +227,65 @@ def treinar(niveis, chuva, montante=None, atraso=0, config_modelo=None) -> dict:
     }
 
 
+# ------------------------------------------------------------ pico do dia
+# A régua e as cotas de alerta valem para o PICO: uma cheia passa de 7 m num
+# certo momento do dia, não "na média". O modelo principal prevê a média do
+# dia; este segundo modelo, menor, prevê quanto o pico passa da média, a
+# partir da forma da curva (subindo, no topo ou descendo) e da chuva do dia.
+NOMES_PICO = ["subida", "subida_seguinte", "descida", "chuva_dia", "nivel"]
+QUANTIS_RESIDUO_PICO = (0.1, 0.3, 0.5, 0.7, 0.9)
+
+
+def _vetor_pico(media_ontem, media, media_amanha, chuva_dia):
+    return [
+        max(0.0, media - media_ontem),
+        max(0.0, media_amanha - media),
+        max(0.0, media_ontem - media),
+        chuva_dia,
+        media,
+    ]
+
+
+def _excesso_heuristico(x):
+    """Sem modelo treinado: subindo em linha reta, o pico (fim do dia) fica meia variação acima da média."""
+    subida, subida_seguinte = x[0], x[1]
+    return 0.5 * max(subida, subida_seguinte) + 0.03
+
+
+def excesso_pico(modelo_pico, x) -> float:
+    if not modelo_pico:
+        return _excesso_heuristico(x)
+    z = (np.array(x) - np.array(modelo_pico["media"])) / np.array(modelo_pico["desvio"])
+    return max(0.0, float(modelo_pico["intercepto"] + z @ np.array(modelo_pico["coef"])))
+
+
+def treinar_pico(medias, maximas, chuva) -> dict | None:
+    """Aprende quanto a máxima do dia passa da média do dia, com os dias observados."""
+    medias = {_d(k): v for k, v in medias.items() if v is not None}
+    maximas = {_d(k): v for k, v in maximas.items() if v is not None}
+    chuva = {_d(k): v for k, v in chuva.items() if v is not None}
+    um = dt.timedelta(days=1)
+    X, y = [], []
+    for d in sorted(medias):
+        if d in maximas and d - um in medias and d + um in medias:
+            X.append(_vetor_pico(medias[d - um], medias[d], medias[d + um], chuva.get(d, 0.0)))
+            y.append(max(0.0, maximas[d] - medias[d]))
+    if len(y) < MIN_DIAS_TREINO:
+        return None
+    X, y = np.array(X, dtype=float), np.array(y, dtype=float)
+    ajuste = _ajustar_ridge(X, y)
+    previsto = np.array([excesso_pico(ajuste, x) for x in X])
+    residuos = y - previsto
+    return {
+        **ajuste,
+        "variaveis": NOMES_PICO,
+        "residuos": [round(float(np.quantile(residuos, q)), 3) for q in QUANTIS_RESIDUO_PICO],
+        "n_dias": int(len(y)),
+        "erro_medio": round(float(np.mean(np.abs(residuos))), 3),
+        "erro_sem_pico": round(float(np.mean(y)), 3),  # erro de usar a média como se fosse o pico
+    }
+
+
 def _monotono(valores):
     saida, maior = [], 0.0
     for v in valores:
@@ -269,14 +328,16 @@ def _normal_acima(limite, media, desvio):
 def _faixa_empirica(pares, chuva_prevista):
     """Erros nas situações de validação com chuva mais parecida com a prevista.
 
-    Os erros são CENTRADOS (tira-se a mediana): a faixa deve mostrar só a
-    incerteza em volta da linha central. Se o modelo tiver viés (errar sempre
-    para um lado), isso é para corrigir no modelo, não para empurrar a faixa;
-    senão a faixa fica toda de um lado da previsão e nunca admite o outro.
+    Devolve (erros centrados, viés). A faixa usa os erros CENTRADOS (tira-se a
+    mediana), para mostrar só a incerteza em volta da linha central; senão ela
+    fica toda de um lado da previsão e nunca admite o outro. O viés (a mediana,
+    negativa quando o modelo costuma ficar abaixo do que o rio fez) é usado à
+    parte, para corrigir a própria linha central.
     """
     ordenados = sorted(pares, key=lambda p: abs(math.log1p(p[0]) - math.log1p(chuva_prevista)))
     erros = np.array([e for _, e in ordenados[: max(MIN_ANALOGOS, len(ordenados) * 2 // 5)]])
-    return erros - np.median(erros)
+    vies = float(np.median(erros))
+    return erros - vies, vies
 
 
 MIN_CENARIOS = 5
@@ -284,14 +345,21 @@ QUANTIS_FAIXA = (0.25, 0.75)  # faixa "mais provável": onde o rio fica em metad
 GRADE_NORMAL = np.array([-1.64, -1.28, -0.84, -0.52, -0.25, 0.0, 0.25, 0.52, 0.84, 1.28, 1.64])
 
 
+RESIDUO_PICO_PADRAO = (-0.1, -0.03, 0.0, 0.05, 0.2)  # sem modelo do pico treinado
+
+
 def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, montante=None,
            cota_inundacao=None, fator_incerteza=1.3, crescimento_diario=0.15, fator_empirico=1.0,
-           cotas_extras=None, cenarios_chuva=None):
+           cotas_extras=None, cenarios_chuva=None, correcao_vies=0.5, fatores_faixa=None):
     """Previsão dos próximos 7 dias a partir do nível atual.
 
-    Com as versões da chuva (`cenarios_chuva`), a linha central ("media") é a
-    MEDIANA das previsões feitas com cada versão. Ela é bem mais estável que a
-    previsão feita só com a chuva "principal", que muda várias vezes por dia.
+    Para cada dia sai a média do dia ("media", com a faixa "min"/"max") e o
+    pico do dia ("pico", com "pico_min"/"pico_max"). As chances de passar de
+    uma cota usam o PICO: é ele que alaga a rua, mesmo que por algumas horas.
+
+    Com as versões da chuva (`cenarios_chuva`), a linha central é a MEDIANA das
+    previsões feitas com cada versão. Ela é bem mais estável que a previsão
+    feita só com a chuva "principal", que muda várias vezes por dia.
     A faixa "mais provável" (25º a 75º percentil: metade dos casos) e as chances
     juntam duas incertezas:
 
@@ -301,6 +369,14 @@ def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, mon
     * a do próprio modelo: os erros reais do teste retroativo, escolhidos entre
       as situações com chuva parecida com a de cada versão (modelo calibrado),
       ou uma curva normal genérica (modelo heurístico).
+
+    Correções:
+    * `correcao_vies`: fração do viés do teste retroativo (o modelo costuma
+      ficar abaixo do rio quando chove muito) que é somada à linha central.
+      0 desliga; 1 corrige tudo. O padrão é metade, porque o teste usa um
+      modelo treinado com menos dados que o modelo final;
+    * `fatores_faixa`: um fator por dia à frente que alarga (>1) ou estreita
+      (<1) a faixa, calculado pelo placar ao vivo (ver `processar.calibrar_faixa`).
 
     Sem cenários, a chuva prevista é tratada como certa (comportamento antigo).
     As margens da faixa nunca diminuem com o horizonte.
@@ -312,10 +388,12 @@ def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, mon
     chuva = {_d(k): v for k, v in chuva.items() if v is not None}
     montante = {_d(k): v for k, v in (montante or {}).items() if v is not None}
     atraso = modelo.get("atraso_montante_dias", 0)
-    medias = simular(modelo, hoje, niveis, chuva, montante, atraso)
     piso = modelo.get("nivel_minimo", 0.0)
     validacao = modelo.get("erros_validacao") or []
     empirico = len(validacao) == HORIZONTE and all(len(p) >= MIN_ANALOGOS for p in validacao)
+    modelo_pico = modelo.get("pico")
+    residuo_pico = np.array(modelo_pico["residuos"] if modelo_pico else RESIDUO_PICO_PADRAO)
+    fatores_faixa = list(fatores_faixa or []) + [1.0] * HORIZONTE
 
     # versões da chuva: o passado e hoje ficam como estão; só os dias futuros mudam
     chuvas = [chuva]
@@ -326,40 +404,67 @@ def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, mon
             c.update({_d(k): v for k, v in cenario.items() if v is not None and _d(k) > hoje})
             chuvas.append(c)
     usa_cenarios = len(chuvas) > 1
-    medias_cenario = [simular(modelo, hoje, niveis, c, montante, atraso) for c in chuvas] if usa_cenarios else [medias]
-    if usa_cenarios:
-        medias = [float(v) for v in np.median(np.array(medias_cenario), axis=0)]
+    # um dia a mais que o horizonte: o pico do 7º dia depende de o rio seguir subindo ou não
+    medias_cenario = [simular(modelo, hoje, niveis, c, montante, atraso, dias=HORIZONTE + 1) for c in chuvas]
 
-    saida, abaixo_max, acima_max = [], 0.0, 0.0
-    for k, media in enumerate(medias):
-        item = {"data": (hoje + dt.timedelta(days=k + 1)).isoformat(), "media": round(media, 2)}
-        if empirico:
-            amostras = np.concatenate([
-                mc[k] - _faixa_empirica(validacao[k], chuva_acumulada(c, hoje, k)) * fator_empirico
-                for c, mc in zip(chuvas, medias_cenario)
-            ])
-        else:
-            desvio_h = modelo["rmse_horizonte"][k] * fator_incerteza * (1 + crescimento_diario * k)
-            amostras = np.concatenate([mc[k] + desvio_h * GRADE_NORMAL for mc in medias_cenario])
-        amostras = np.maximum(amostras, piso)
-        abaixo = max(0.0, media - float(np.quantile(amostras, QUANTIS_FAIXA[0])))
-        acima = max(0.0, float(np.quantile(amostras, QUANTIS_FAIXA[1])) - media)
-        abaixo_max, acima_max = max(abaixo_max, abaixo), max(acima_max, acima)
-        chance = lambda c, a=amostras: float(np.mean(a >= c))  # noqa: E731
-        item.update({
-            "min": round(max(piso, media - abaixo_max), 2),
-            "max": round(media + acima_max, 2),
+    saida = []
+    margens = {"abaixo": 0.0, "acima": 0.0, "pico_abaixo": 0.0, "pico_acima": 0.0}
+    for k in range(HORIZONTE):
+        alvo = hoje + dt.timedelta(days=k + 1)
+        centros, amostras, picos, amostras_pico = [], [], [], []
+        for c, mc in zip(chuvas, medias_cenario):
+            if empirico:
+                erros, vies = _faixa_empirica(validacao[k], chuva_acumulada(c, hoje, k))
+                centro = mc[k] - vies * correcao_vies
+                am = centro - erros * fator_empirico
+            else:
+                centro = mc[k]
+                desvio_h = modelo["rmse_horizonte"][k] * fator_incerteza * (1 + crescimento_diario * k)
+                am = centro + desvio_h * GRADE_NORMAL
+            anterior = mc[k - 1] if k else nivel_atual
+            excesso = excesso_pico(modelo_pico, _vetor_pico(anterior, mc[k], mc[k + 1], c.get(alvo, 0.0)))
+            centros.append(centro)
+            amostras.append(am)
+            picos.append(centro + excesso)
+            amostras_pico.append(((am + excesso)[:, None] + residuo_pico[None, :]).ravel())
+        media = float(np.median(centros))
+        pico = max(media, float(np.median(picos)))
+
+        # alarga ou estreita a faixa em volta da linha central, conforme o placar
+        f = float(fatores_faixa[k])
+        amostras = np.maximum(media + (np.concatenate(amostras) - media) * f, piso)
+        amostras_pico = np.maximum(pico + (np.concatenate(amostras_pico) - pico) * f, piso)
+
+        q_baixo, q_alto = (float(np.quantile(amostras, q)) for q in QUANTIS_FAIXA)
+        p_baixo, p_alto = (float(np.quantile(amostras_pico, q)) for q in QUANTIS_FAIXA)
+        margens["abaixo"] = max(margens["abaixo"], media - q_baixo)
+        margens["acima"] = max(margens["acima"], q_alto - media)
+        margens["pico_abaixo"] = max(margens["pico_abaixo"], pico - p_baixo)
+        margens["pico_acima"] = max(margens["pico_acima"], p_alto - pico)
+        chance = lambda c, a=amostras_pico: float(np.mean(a >= c))  # noqa: E731
+        item = {
+            "data": alvo.isoformat(),
+            "media": round(media, 2),
+            "min": round(max(piso, media - margens["abaixo"]), 2),
+            "max": round(media + margens["acima"], 2),
             "desvio": round(float(np.std(amostras)), 3),
-        })
+            "pico": round(pico, 2),
+            "pico_min": round(max(piso, media, pico - margens["pico_abaixo"]), 2),
+            "pico_max": round(pico + margens["pico_acima"], 2),
+        }
+        if f != 1.0:
+            item["fator_faixa"] = round(f, 2)
         if cota_inundacao is not None:
             item["prob_inundacao"] = round(chance(cota_inundacao), 3)
         if cotas_extras:
-            # chance de passar de cada marco da régua / local cadastrado, para a linha do tempo
+            # chance de o pico do dia passar de cada marco da régua / local cadastrado
             item["prob_cotas"] = {f"{c:.2f}": round(chance(c), 3) for c in cotas_extras}
         if usa_cenarios:
             item["cenarios"] = len(chuvas)
         saida.append(item)
     return saida
+
+
 
 
 def projecao_horaria(agora: dt.datetime, nivel_atual: float, tendencia_m_h: float, diaria: list[dict], horas=48):

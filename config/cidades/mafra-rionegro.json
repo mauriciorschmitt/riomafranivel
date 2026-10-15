@@ -245,6 +245,10 @@
       "resposta_hoje": 0.035,
       "resposta_ontem": 0.02
     },
+    "correcao_vies": 0.5,
+    "_nota_correcao_vies": "correcao_vies: quanto do viés medido no teste retroativo é corrigido na linha central (0 = nada, 1 = tudo). O modelo costuma ficar abaixo do rio quando chove muito.",
+    "calibrar_faixa": true,
+    "_nota_calibrar_faixa": "calibrar_faixa: alarga ou estreita a faixa \"mais provável\" conforme o placar ao vivo, para ela acertar perto de metade das vezes. Usa as previsões desde placar_desde.",
     "placar_desde": "2026-10-03",
     "_nota_placar": "placar_desde: o placar só conta previsões feitas a partir desta data (versão atual do modelo). Troque quando o modelo mudar."
   },

@@ -114,17 +114,61 @@ def comparar_chuva(previsoes: dict, chuva_obs: dict, hoje: dt.date, desde: str =
     return {"n": n, "prevista_mm": round(prevista, 1), "caiu_mm": round(caiu, 1), "fator": fator}
 
 
-def placar(previsoes: dict, medias_diarias: dict, hoje: dt.date, desde: str = "") -> dict:
+MIN_CALIBRACAO = 5     # previsões conferidas, por dia à frente, para começar a mexer na faixa
+PESO_CALIBRACAO = 15   # com poucas conferências o fator fica perto de 1 (encolhe para 1)
+LIMITES_FATOR_FAIXA = (0.7, 3.0)
+
+
+def calibrar_faixa(previsoes: dict, medias_diarias: dict, hoje: dt.date, desde: str = "") -> list[float]:
+    """Fator por dia à frente para a faixa "mais provável" acertar metade das vezes.
+
+    Para cada previsão guardada e já conferida mede quantas "meias-faixas" o rio
+    ficou longe da linha central (do lado em que ficou). Se a faixa estivesse
+    certa, a mediana disso seria 1. A largura é medida SEM o fator que já tinha
+    sido aplicado na época, para o ajuste não ficar correndo atrás de si mesmo.
+    Com poucas conferências, o fator é puxado para 1.
+    """
+    fatores = []
+    for k in range(7):
+        razoes = []
+        for emitida, prev in previsoes.items():
+            if emitida < desde or k >= len(prev.get("dias", [])):
+                continue
+            d = prev["dias"][k]
+            alvo = dt.date.fromisoformat(d["data"])
+            if alvo >= hoje or alvo not in medias_diarias or None in (d.get("media"), d.get("min"), d.get("max")):
+                continue
+            obs = medias_diarias[alvo]
+            lado = (d["max"] - d["media"]) if obs >= d["media"] else (d["media"] - d["min"])
+            lado /= d.get("fator_faixa") or 1.0
+            if lado > 0.01:
+                razoes.append(abs(obs - d["media"]) / lado)
+        if len(razoes) < MIN_CALIBRACAO:
+            fatores.append(1.0)
+            continue
+        bruto = statistics.median(razoes)
+        n = len(razoes)
+        fator = 1.0 + (bruto - 1.0) * n / (n + PESO_CALIBRACAO)
+        fatores.append(round(min(LIMITES_FATOR_FAIXA[1], max(LIMITES_FATOR_FAIXA[0], fator)), 2))
+    # a incerteza não diminui com o horizonte
+    for k in range(1, len(fatores)):
+        fatores[k] = max(fatores[k], fatores[k - 1])
+    return fatores
+
+
+def placar(previsoes: dict, medias_diarias: dict, hoje: dt.date, desde: str = "",
+           maximas_diarias: dict | None = None) -> dict:
     """Compara as previsões guardadas (uma por dia) com a média observada de cada dia.
 
     `desde`: só conta previsões feitas a partir dessa data (a versão atual do modelo),
     para o placar não misturar versões antigas com a de agora.
     """
     previsoes = {k: v for k, v in previsoes.items() if k >= desde}
+    maximas_diarias = maximas_diarias or {}
     horizontes = []
     pares_1d, pares_3d = {}, {}
     for k in range(7):
-        erros, palpite, dentro = [], [], []
+        erros, palpite, dentro, erros_pico = [], [], [], []
         for emitida, prev in previsoes.items():
             if k >= len(prev["dias"]):
                 continue
@@ -137,6 +181,8 @@ def placar(previsoes: dict, medias_diarias: dict, hoje: dt.date, desde: str = ""
             palpite.append(abs(prev["nivel_atual"] - obs))
             if d.get("min") is not None and d.get("max") is not None:
                 dentro.append(d["min"] <= obs <= d["max"])
+            if d.get("pico") is not None and alvo in maximas_diarias:
+                erros_pico.append(abs(d["pico"] - maximas_diarias[alvo]))
             if k == 0:
                 pares_1d[alvo] = (obs, d["media"])
             if k == 2:
@@ -147,6 +193,8 @@ def placar(previsoes: dict, medias_diarias: dict, hoje: dt.date, desde: str = ""
             "erro_medio": round(statistics.fmean(erros), 3) if erros else None,
             "erro_palpite": round(statistics.fmean(palpite), 3) if palpite else None,
             "na_faixa": round(sum(dentro) / len(dentro), 3) if dentro else None,
+            "n_pico": len(erros_pico),
+            "erro_pico": round(statistics.fmean(erros_pico), 3) if erros_pico else None,
         })
     serie = [
         [d.isoformat(), round(obs, 2), round(prev1, 2), None if d not in pares_3d else round(pares_3d[d], 2)]
@@ -224,11 +272,18 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
 
     # previsão de nível
     cfg_prev = config.get("previsao", {})
+    previsoes_guardadas = bruto.get("previsoes") or {}
+    fatores_faixa = (
+        calibrar_faixa(previsoes_guardadas, medias_diarias, hoje, desde)
+        if cfg_prev.get("calibrar_faixa", True) else [1.0] * mod.HORIZONTE
+    )
     diaria = mod.prever(
         modelo, hoje, ultima["nivel"], medias_diarias, chuva_bacia, montante_diario,
         cota_inundacao=cota_inundacao, fator_incerteza=float(cfg_prev.get("fator_incerteza", 1.3)),
         crescimento_diario=float(cfg_prev.get("crescimento_incerteza_dia", 0.15)),
         fator_empirico=float(cfg_prev.get("fator_incerteza_empirico", 1.0)),
+        correcao_vies=float(cfg_prev.get("correcao_vies", 0.5)),
+        fatores_faixa=fatores_faixa,
         cotas_extras=sorted(
             {float(x["cota"]) for x in config.get("regua", []) if "cota" in x}
             | {float(x["cota"]) for x in config.get("locais", []) if "cota" in x}
@@ -250,6 +305,8 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
             item["prob"] = round(100 * sum(1 for c in conjunto if (c.get(data) or 0) >= 1.0) / len(conjunto))
         if i == 0:
             item.update({"media": round(ultima["nivel"], 2), "atual": True})
+            if hoje in maximas_diarias:
+                item["pico_observado"] = round(maximas_diarias[hoje], 2)  # maior leitura de hoje até agora
             # o que o site previu ONTEM (às 7h) para hoje: mostra se a previsão acertou
             ontem_emitida = (hoje - dt.timedelta(days=1)).isoformat()
             anterior = (bruto.get("previsoes") or {}).get(ontem_emitida)
@@ -345,7 +402,10 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
         "serie_diaria_media": [
             [d.isoformat(), round(v, 2)] for d, v in medias_diarias.items() if d >= hoje - dt.timedelta(days=30)
         ],
-        "placar": {**placar(bruto.get("previsoes") or {}, medias_diarias, hoje, desde), "versao_desde": desde or None, "chuva": correcao},
+        "placar": {
+            **placar(previsoes_guardadas, medias_diarias, hoje, desde, maximas_diarias),
+            "versao_desde": desde or None, "chuva": correcao, "fatores_faixa": fatores_faixa,
+        },
         "cenarios_chuva": diaria[0].get("cenarios") if diaria else None,
         "chuva_diaria": chuva_diaria,
         "previsao_horaria": horaria,
@@ -362,8 +422,12 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
         },
         "extremos": extremos,
         "modelo": {
-            k: modelo.get(k)
-            for k in ("tipo", "n_dias", "periodo", "treinado_em", "rmse_horizonte", "motivo", "validacao")
-            if modelo.get(k) is not None
+            **{
+                k: modelo.get(k)
+                for k in ("tipo", "n_dias", "periodo", "treinado_em", "rmse_horizonte", "motivo", "validacao")
+                if modelo.get(k) is not None
+            },
+            **({"pico": {k: modelo["pico"][k] for k in ("n_dias", "erro_medio", "erro_sem_pico")}}
+               if modelo.get("pico") else {}),
         },
     }
