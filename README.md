@@ -106,10 +106,13 @@ Cada arquivo em `config/cidades/` vira uma cidade no mesmo site, com um seletor 
 | `cheias_historicas` | Grandes cheias com data, cota e descrição |
 | `maximas_anuais_extra` | Anos que faltam na série da ANA (por exemplo, cheias anteriores à estação) |
 | `contatos` | Defesa Civil municipal e abrigos. Itens sem telefone ou sem nome não aparecem |
+| `o_que_fazer` | Opcional: troca o texto "O que fazer agora" de cada faixa, por exemplo `{"alerta": "..."}`. Sem ele, o site usa textos padrão |
 
 Os níveis de impacto, pontes e cheias de Rio Negro/Mafra no exemplo vieram de um painel de terceiros e **precisam ser conferidos com a Defesa Civil** antes de o site ir ao ar. Os contatos municipais estão em branco de propósito.
 
 ## App no celular
+
+Na aba Emergência, o **plano da família** é preenchido na própria página (fica salvo só no celular) e enviado pelo WhatsApp com um toque, já com o link da previsão.
 
 O site é um aplicativo da web instalável (PWA). No Android, o Chrome oferece "Instalar aplicativo" e o botão "Instalar no celular" aparece no boletim; no iPhone, pelo Safari, em Compartilhar > Adicionar à Tela de Início. O app abre em tela cheia, atualiza sozinho a cada coleta e, sem internet, mostra o último boletim guardado com um aviso. Os arquivos são `docs/manifest.webmanifest`, `docs/sw.js` e `docs/icones/`.
 

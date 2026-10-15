@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="estilo.css?v=b55ef1b2">
+  <link rel="stylesheet" href="estilo.css?v=c25db963">
 </head>
 <body>
   <div id="demo-aviso" class="demo-aviso" hidden>Demonstração com dados fictícios. Não use para decisões reais.</div>
@@ -49,6 +49,7 @@
       <p class="boletim-hora" id="boletim-hora"></p>
       <h1 class="manchete" id="manchete"></h1>
       <p class="submanchete" id="submanchete"></p>
+      <p class="minha-rua" id="minha-rua" hidden></p>
 
       <div class="boletim-grade">
         <div class="coluna-leitura">
@@ -60,6 +61,16 @@
               <svg id="spark" viewBox="0 0 300 56" preserveAspectRatio="none" role="img" aria-label="Nível nas últimas 24 horas"></svg>
               <figcaption>Últimas 24 horas</figcaption>
             </figure>
+          </div>
+
+          <div class="fazer" id="fazer">
+            <h2 class="fazer-titulo">O que fazer agora</h2>
+            <p id="fazer-texto"></p>
+          </div>
+
+          <div class="marcos" id="marcos" hidden>
+            <h2 class="marcos-titulo">O que acontece se o rio subir</h2>
+            <ul id="marcos-lista"></ul>
           </div>
 
           <div class="onde" id="onde">
@@ -126,7 +137,8 @@
         </div>
         <p class="secao-nota" id="tempo-nota"></p>
         <div class="mapa-tempo">
-          <iframe id="mapa-tempo" title="Mapa do tempo na bacia do rio" loading="lazy" allowfullscreen></iframe>
+          <button type="button" class="botao mapa-abrir" id="mapa-abrir">Mostrar o mapa (usa mais internet)</button>
+          <iframe id="mapa-tempo" title="Mapa do tempo na bacia do rio" loading="lazy" allowfullscreen hidden></iframe>
         </div>
         <p class="credito">Mapa: <a href="https://www.windy.com" target="_blank" rel="noopener">Windy.com</a>, com radares, satélite e modelos meteorológicos. Toque no mapa para ver a previsão de um ponto.</p>
       </div>
@@ -184,17 +196,11 @@
       <div class="subsecao" id="bloco-extremos">
         <h3>Com que frequência o rio chega a cada altura</h3>
         <p class="destaque-numero" id="chance-anual"></p>
+        <table class="tabela" id="tabela-retorno">
+          <thead><tr><th scope="col">O rio passa de</th><th scope="col">Costuma acontecer</th></tr></thead>
+          <tbody></tbody>
+        </table>
         <p class="secao-nota" id="extremos-fonte"></p>
-        <div class="extremos">
-          <div class="grafico"><canvas id="graf-gumbel" aria-label="Altura esperada por tempo de retorno"></canvas></div>
-          <div>
-            <table class="tabela" id="tabela-retorno">
-              <thead><tr><th scope="col">Cheia</th><th scope="col">Acontece a cada</th><th scope="col">Chega a</th><th scope="col">Chance por ano</th></tr></thead>
-              <tbody></tbody>
-            </table>
-            <p class="secao-nota">Uma cheia “de 100 anos” não acontece uma vez por século: ela tem 1% de chance em qualquer ano, inclusive em dois anos seguidos.</p>
-          </div>
-        </div>
       </div>
 
       <div class="subsecao" id="bloco-cheias">
@@ -225,12 +231,14 @@
       </div>
 
       <div class="subsecao plano" id="plano">
-        <div class="subsecao-topo">
-          <h3>Plano da família</h3>
-          <button type="button" class="botao" id="imprimir-plano">Imprimir o plano</button>
-        </div>
-        <p class="secao-nota">Preencha à mão, cole na geladeira e combine com quem mora com você. Vale mais que qualquer site na hora da pressa.</p>
+        <h3>Plano da família</h3>
+        <p class="secao-nota">Preencha aqui, mande no grupo da família pelo WhatsApp e combine com quem mora com você. O que você escreve fica salvo só neste celular.</p>
         <div id="plano-conteudo"></div>
+        <div class="acoes plano-acoes">
+          <button type="button" class="botao botao-forte" id="plano-whatsapp">Mandar o plano no WhatsApp</button>
+          <button type="button" class="botao" id="imprimir-plano">Imprimir</button>
+          <button type="button" class="botao" id="plano-limpar">Apagar</button>
+        </div>
         <p class="secao-nota" id="orientacoes"></p>
       </div>
     </section>
@@ -239,6 +247,6 @@
   <footer class="rodape" id="rodape"></footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js" crossorigin="anonymous"></script>
-  <script src="app.js?v=bf50b857"></script>
+  <script src="app.js?v=e9ec6524"></script>
 </body>
 </html>
