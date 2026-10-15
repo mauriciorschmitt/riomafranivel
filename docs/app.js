@@ -261,8 +261,34 @@
     const link = $("#link-alertas");
     if (canal) { link.href = `https://t.me/${canal.replace(/^@/, "")}`; link.hidden = false; }
 
+    renderFazer(st);
+    renderMarcos();
     montarLocais();
     renderLocal();
+  }
+
+  // o que fazer, conforme a faixa; a cidade pode trocar os textos em config "o_que_fazer"
+  const FAZER_PADRAO = {
+    normal: "Rio normal. Bom momento para fazer o plano da família, na aba Emergência.",
+    atencao: "Acompanhe o nível do rio e confira se a mochila de emergência está pronta.",
+    alerta: "Deixe a mochila pronta, tire do chão o que pode molhar e combine com a família para onde ir.",
+    emergencia: "Se a água chegar perto da sua casa, saia. Leve a mochila e vá para um abrigo ou casa combinada. Defesa Civil: 199.",
+    extremo: "Saia das áreas de risco agora. Se precisar de ajuda, ligue 199 ou 193.",
+  };
+  function renderFazer(st) {
+    const el = $("#fazer");
+    el.dataset.status = st.id;
+    $("#fazer-texto").textContent = (D.config.o_que_fazer || {})[st.id] || FAZER_PADRAO[st.id] || FAZER_PADRAO.normal;
+  }
+
+  // os dois próximos marcos da régua acima do nível de agora
+  function renderMarcos() {
+    const n = D.atual.nivel;
+    const proximos = [...(D.config.regua || [])].filter((m) => m.cota != null && m.cota > n).sort((a, b) => a.cota - b.cota).slice(0, 2);
+    $("#marcos").hidden = !proximos.length;
+    const falta = (m) => (m < 1 ? `${Math.round(m * 100)} cm` : `${fmt(m)} m`);
+    $("#marcos-lista").innerHTML = proximos.map((m) =>
+      `<li><b>${fmt(m.cota)} m</b><span>${esc(m.titulo)}<small>faltam ${falta(m.cota - n)}${m.texto ? `. ${esc(m.texto)}` : ""}</small></span></li>`).join("");
   }
 
   // ------------------------------------------------------------ onde eu moro
@@ -282,14 +308,28 @@
   }
   function montarLocais() {
     const sel = $("#local-select");
-    const locais = [...listaLocais()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    // pela altura: o que alaga primeiro vem primeiro
+    const locais = [...listaLocais()].sort((a, b) => a.cota - b.cota || a.nome.localeCompare(b.nome, "pt-BR"));
     sel.innerHTML = `<option value="">Escolha sua rua, bairro ou ponte</option>` +
-      locais.map((x) => `<option value="${esc(x.nome)}">${esc(x.nome)} (${fmt(x.cota)} m)</option>`).join("");
+      locais.map((x) => `<option value="${esc(x.nome)}">${fmt(x.cota)} m · ${esc(x.nome)}</option>`).join("");
     const e = localEscolhido();
     if (e) sel.value = e.nome;
   }
+  function renderMinhaRua(e) {
+    const el = $("#minha-rua");
+    el.hidden = !e;
+    if (!e) return;
+    const n = D.atual.nivel;
+    const falta = e.cota - n;
+    el.classList.toggle("perigo", falta <= 0.5);
+    el.textContent = falta <= 0
+      ? `${e.nome}: a água já passou do nível que chega lá (${fmt(e.cota)} m). Siga a Defesa Civil: 199.`
+      : `${e.nome}: faltam ${falta < 1 ? `${Math.round(falta * 100)} cm` : `${fmt(falta)} m`} para a água chegar lá (${fmt(e.cota)} m).`;
+  }
+
   function renderLocal() {
     const e = localEscolhido();
+    renderMinhaRua(e);
     const el = $("#local-resultado");
     el.classList.remove("perigo");
     if (!e) {
@@ -824,8 +864,10 @@
     rain: { nota: "Chuva prevista para as próximas horas pelo modelo europeu (ECMWF), a mesma base usada na previsão do rio. Use a linha do tempo do mapa para avançar as horas.", zoom: 8 },
   };
   let camadaTempo = "radar";
-  function renderTempo(camada = camadaTempo) {
+  let mapaLiberado = false; // o mapa gasta bastante internet: só carrega quando a pessoa pede
+  function renderTempo(camada = camadaTempo, liberar = false) {
     camadaTempo = camada;
+    if (liberar) mapaLiberado = true;
     const c = D.config.estacao;
     const info = CAMADAS_TEMPO[camada] || CAMADAS_TEMPO.radar;
     const params = new URLSearchParams({
@@ -836,7 +878,9 @@
     });
     const url = `https://embed.windy.com/embed2.html?${params}`;
     const quadro = $("#mapa-tempo");
-    if (quadro.getAttribute("src") !== url) quadro.setAttribute("src", url);
+    quadro.hidden = !mapaLiberado;
+    $("#mapa-abrir").hidden = mapaLiberado;
+    if (mapaLiberado && quadro.getAttribute("src") !== url) quadro.setAttribute("src", url);
     $("#tempo-nota").textContent = info.nota;
     $$("#camada-tempo button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.camada === camada));
   }
@@ -956,35 +1000,14 @@
     });
   }
 
-  function graficoGumbel() {
-    destruir("gumbel");
+  function tabelaFrequencia() {
     const e = D.extremos;
     if (!e) { $("#bloco-extremos").hidden = true; return; }
     const cotaInund = inundacao();
-    $("#extremos-fonte").textContent = `Distribuição de Gumbel ajustada às cheias máximas de ${e.n_anos} anos (${e.periodo[0]} a ${e.periodo[1]}).`;
-    graficos.gumbel = new Chart($("#graf-gumbel"), {
-      type: "line",
-      data: {
-        datasets: [{
-          label: "Altura esperada", data: e.curva.map((p) => ({ x: p.anos, y: p.cota })),
-          borderColor: css("--lama"), backgroundColor: css("--lama"), pointRadius: 3, tension: 0.3,
-        }],
-      },
-      options: opcoesBase({
-        y: { title: { display: true, text: "Altura da cheia", color: css("--tinta-suave") } },
-        linhasCota: { linhas: cotaInund != null ? [{ valor: cotaInund, cor: corStatus("emergencia"), rotulo: `Inundação (${fmt(cotaInund)} m)` }] : [] },
-        scales: {
-          x: {
-            type: "logarithmic", min: 1, max: 100,
-            title: { display: true, text: "Acontece em média a cada (anos)", color: css("--tinta-suave") },
-            ticks: { color: css("--tinta-suave"), callback: (v) => ([1, 2, 5, 10, 25, 50, 100].includes(v) ? v : "") },
-            grid: { color: css("--linha") },
-          },
-        },
-      }),
-    });
-    $("#tabela-retorno tbody").innerHTML = e.tabela.map((l) =>
-      `<tr class="${cotaInund != null && l.cota >= cotaInund ? "acima-inundacao" : ""}"><td>${esc(l.nome)}</td><td>${l.anos} anos</td><td>${fmt(l.cota)} m</td><td>${pct(l.chance)}</td></tr>`).join("");
+    $("#extremos-fonte").textContent = `Calculado com a maior cheia de cada ano, de ${e.periodo[0]} a ${e.periodo[1]}. "Uma vez a cada 10 anos" é uma média: pode acontecer em dois anos seguidos.`;
+    const quando = { 2: "Um ano sim, um ano não", 10: "Uma vez a cada 10 anos", 100: "Uma vez a cada 100 anos" };
+    $("#tabela-retorno tbody").innerHTML = e.tabela.filter((l) => quando[l.anos]).map((l) =>
+      `<tr class="${cotaInund != null && l.cota >= cotaInund ? "acima-inundacao" : ""}"><td>${fmt(l.cota)} m</td><td>${quando[l.anos]}</td></tr>`).join("");
   }
 
   function renderCheias() {
@@ -1010,7 +1033,8 @@
   }
 
   function renderHistorico() {
-    if (typeof Chart !== "undefined") { graficoHistorico(); graficoGumbel(); }
+    if (typeof Chart !== "undefined") graficoHistorico();
+    tabelaFrequencia();
     const e = D.extremos, cota = inundacao();
     $("#chance-anual").innerHTML = e?.chance_anual_inundacao != null
       ? `<b>${pct(e.chance_anual_inundacao)}</b> de chance de o rio passar de ${fmt(cota)} m em um ano qualquer.`
@@ -1050,31 +1074,93 @@
           ${a.mapa ? `<a class="botao botao-pequeno" href="${esc(a.mapa)}" target="_blank" rel="noopener">Como chegar</a>` : ""}
         </li>`).join("")}</ul>${mapaCidade}</div>`;
     }).join("");
-    renderPlano();
+    // não redesenha o plano enquanto a pessoa está escrevendo nele (o boletim se atualiza sozinho)
+    if (!document.activeElement?.closest("#plano-conteudo")) renderPlano();
+  }
+
+  // ------------------------------------------------------------ plano da família (preenchível)
+  const MOCHILA = ["Documentos em saco plástico", "Remédios e receitas", "Carregador e bateria extra", "Lanterna e pilhas",
+    "Roupa, agasalho e cobertor", "Água e comida para 2 dias", "Ração, coleira e remédios dos animais"];
+  const CAMPOS_PLANO = [
+    { id: "familia", rotulo: "Família", tipo: "text", dica: "Ex.: Família Souza" },
+    { id: "lugar", rotulo: "Nossa casa", tipo: "local" },
+    { id: "sair", rotulo: "Saímos de casa com o rio em", tipo: "text", dica: "Ex.: 6,50 m", ajuda: "Combine uma altura um pouco abaixo da que alaga a sua rua." },
+    { id: "abrigo", rotulo: "Vamos para", tipo: "abrigo", dica: "Abrigo ou casa de parente" },
+    { id: "encontro", rotulo: "Ponto de encontro", tipo: "text", dica: "Se a família se separar" },
+    { id: "busca", rotulo: "Quem busca crianças e idosos", tipo: "text" },
+    { id: "animais", rotulo: "Animais vão para", tipo: "text" },
+    { id: "telefones", rotulo: "Telefones da família", tipo: "area", dica: "Nome e número de cada um" },
+  ];
+  const chavePlano = () => `regua-viva:${D.config.slug}:plano`;
+  function lerPlano() {
+    try { return JSON.parse(localStorage.getItem(chavePlano()) || "{}"); } catch (_) { return {}; }
+  }
+  function salvarPlano() {
+    const plano = { mochila: $$("#plano-conteudo [data-mochila]").filter((c) => c.checked).map((c) => c.dataset.mochila) };
+    CAMPOS_PLANO.forEach((f) => { const el = $(`#plano-${f.id}`); if (el) plano[f.id] = el.value.trim(); });
+    try { localStorage.setItem(chavePlano(), JSON.stringify(plano)); } catch (_) { /* sem armazenamento: só não fica salvo */ }
+    return plano;
+  }
+  const siteDaCidade = () => D.config.url_site || location.href.split("#")[0].split("?")[0];
+
+  function textoPlano(plano) {
+    const c = D.config;
+    const local = listaLocais().find((x) => x.nome === plano.lugar);
+    const linhas = [`*Plano da família para cheias*${plano.familia ? ` (${plano.familia})` : ""}`, `${c.rio}, ${c.local}`, ""];
+    const item = (rotulo, valor) => { if (valor) linhas.push(`*${rotulo}:* ${valor}`); };
+    item("Nossa casa", local ? `${local.nome} (a água chega lá com ${fmt(local.cota)} m)` : plano.lugar);
+    item("Saímos de casa com o rio em", plano.sair);
+    item("Vamos para", plano.abrigo);
+    item("Ponto de encontro", plano.encontro);
+    item("Quem busca crianças e idosos", plano.busca);
+    item("Animais vão para", plano.animais);
+    if (plano.telefones) linhas.push(`*Telefones da família:*\n${plano.telefones}`);
+    const prontos = MOCHILA.filter((m) => (plano.mochila || []).includes(m));
+    const faltam = MOCHILA.filter((m) => !prontos.includes(m));
+    if (prontos.length) item("Mochila pronta", prontos.join(", "));
+    if (faltam.length) item("Falta separar", faltam.join(", "));
+    linhas.push("", "Emergência: Defesa Civil 199, Bombeiros 193, SAMU 192.");
+    const orgaos = ((c.contatos || {}).orgaos || []).filter((o) => o.nome && (o.plantao || o.fixo));
+    orgaos.forEach((o) => linhas.push(`${o.nome}: ${o.plantao || o.fixo}`));
+    linhas.push("", `Nível do rio e previsão: ${siteDaCidade()}`);
+    return linhas.join("\n");
+  }
+
+  function mandarPlano() {
+    const texto = textoPlano(salvarPlano());
+    // wa.me abre o WhatsApp (app no celular, WhatsApp Web no computador) com a mensagem pronta
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank", "noopener");
   }
 
   function renderPlano() {
     const c = D.config;
-    const local = localEscolhido();
     const ct = c.contatos || {};
     const orgaos = (ct.orgaos || []).filter((o) => o.nome && (o.plantao || o.fixo));
     const abrigos = (ct.abrigos || []).filter((a) => a.nome);
-    const campo = (rotulo, valor = "") => `<div class="plano-campo"><span>${rotulo}</span><span class="linha-escrever">${valor}</span></div>`;
-    const site = c.url_site || location.href.split("#")[0].split("?")[0];
+    const plano = lerPlano();
+    if (!plano.lugar) plano.lugar = localEscolhido()?.nome || "";
+    const locais = [...listaLocais()].sort((a, b) => a.cota - b.cota);
+    const controle = (f) => {
+      const valor = esc(plano[f.id] || "");
+      const dica = f.dica ? ` placeholder="${esc(f.dica)}"` : "";
+      if (f.tipo === "area") return `<textarea id="plano-${f.id}" rows="3"${dica}>${valor}</textarea>`;
+      if (f.tipo === "local") return `<select id="plano-${f.id}"><option value="">Escolha a rua ou bairro</option>${
+        locais.map((x) => `<option value="${esc(x.nome)}"${x.nome === plano.lugar ? " selected" : ""}>${esc(x.nome)} (água chega com ${fmt(x.cota)} m)</option>`).join("")}</select>`;
+      const lista = f.tipo === "abrigo" ? ` list="plano-abrigos"` : "";
+      return `<input id="plano-${f.id}" type="text" value="${valor}"${dica}${lista} autocomplete="off">`;
+    };
     $("#plano-conteudo").innerHTML = `<div class="plano-folha">
       <h4>Plano da família para cheias</h4>
-      <p>${esc(c.rio)}, ${esc(c.local)}. Nível do rio e previsão: ${esc(site)}</p>
-      ${campo("Nosso lugar é atingido com:", local ? `${esc(local.nome)}: ${fmt(local.cota)} m` : "")}
-      ${campo("Combinamos sair de casa com o rio em:")}
-      ${campo("Abrigo ou casa combinada:")}
-      ${campo("Ponto de encontro da família:")}
-      ${campo("Quem busca crianças e idosos:")}
-      ${campo("Para onde vão os animais:")}
+      <p>${esc(c.rio)}, ${esc(c.local)}. Nível do rio e previsão: ${esc(siteDaCidade())}</p>
+      ${CAMPOS_PLANO.map((f) => `<div class="plano-campo"><label for="plano-${f.id}">${esc(f.rotulo)}${f.ajuda ? `<span class="plano-ajuda">${esc(f.ajuda)}</span>` : ""}</label>${controle(f)}</div>`).join("")}
+      <datalist id="plano-abrigos">${abrigos.map((a) => `<option value="${esc(a.nome)}${a.cidade ? ` (${esc(a.cidade)})` : ""}">`).join("")}</datalist>
+      <div><strong>Mochila pronta</strong> <span class="plano-ajuda">Marque o que já está separado.</span><ul class="plano-mochila">${
+        MOCHILA.map((m) => `<li><label><input type="checkbox" data-mochila="${esc(m)}"${(plano.mochila || []).includes(m) ? " checked" : ""}> ${esc(m)}</label></li>`).join("")}</ul></div>
       <div><strong>Telefones</strong><div class="plano-telefones"><span>Defesa Civil 199</span><span>Bombeiros 193</span><span>SAMU 192</span><span>Polícia 190</span>${
         orgaos.map((o) => `<span>${esc(o.nome)}: ${esc(o.plantao || o.fixo)}</span>`).join("")}</div></div>
       ${abrigos.length ? `<div><strong>Abrigos da cidade</strong><ul class="plano-lista">${[...abrigos].sort((a, b) => (a.cidade || "").localeCompare(b.cidade || "") || (a.ordem ?? 99) - (b.ordem ?? 99)).map((a) => `<li>${esc(a.nome)}${a.endereco ? `, ${esc(a.endereco)}` : ""}${a.cidade ? ` (${esc(a.cidade)})` : ""}${a.ordem ? `: ${a.ordem === 1 ? "abre primeiro" : `${a.ordem}º a abrir`}` : ""}</li>`).join("")}</ul></div>` : ""}
-      <div><strong>Mochila pronta</strong><ul class="plano-lista"><li>Documentos em saco plástico</li><li>Remédios e receitas</li><li>Carregador e bateria extra</li><li>Lanterna e pilhas</li><li>Roupa, agasalho e cobertor</li><li>Ração, coleira e remédios dos animais</li></ul></div>
     </div>`;
+
     $("#orientacoes").innerHTML = c.orientacoes_url
       ? `Orientações oficiais sobre o que fazer antes, durante e depois de uma enchente: <a href="${esc(c.orientacoes_url)}" target="_blank" rel="noopener">Defesa Civil estadual</a>.`
       : "";
@@ -1238,10 +1324,19 @@
       if (typeof Chart !== "undefined") graficoHistorico();
     }));
     $$("#alterna-grafico button").forEach((b) => b.addEventListener("click", () => mostrarGrafico(b.dataset.grafico)));
-    $$("#camada-tempo button").forEach((b) => b.addEventListener("click", () => renderTempo(b.dataset.camada)));
+    $$("#camada-tempo button").forEach((b) => b.addEventListener("click", () => renderTempo(b.dataset.camada, true)));
+    $("#mapa-abrir").addEventListener("click", () => renderTempo(camadaTempo, true));
     $("#mostrar-pontes").addEventListener("change", () => { if (typeof Chart !== "undefined") graficoHistorico(); });
     $("#boletim-imagem").addEventListener("click", boletimImagem);
-    $("#imprimir-plano").addEventListener("click", () => window.print());
+    $("#imprimir-plano").addEventListener("click", () => { salvarPlano(); window.print(); });
+    $("#plano-whatsapp").addEventListener("click", mandarPlano);
+    $("#plano-conteudo").addEventListener("input", salvarPlano);
+    $("#plano-conteudo").addEventListener("change", salvarPlano);
+    $("#plano-limpar").addEventListener("click", () => {
+      if (!confirm("Apagar o plano preenchido neste celular?")) return;
+      try { localStorage.removeItem(chavePlano()); } catch (_) { /* nada guardado */ }
+      renderPlano();
+    });
     $("#local-select").addEventListener("change", (ev) => {
       try {
         if (ev.target.value) localStorage.setItem(chaveLocal(), ev.target.value);
