@@ -1,0 +1,24 @@
+name: Testar alerta no Telegram
+
+on:
+  workflow_dispatch:
+    inputs:
+      cidade:
+        description: "Cidade (nome do arquivo em config/cidades)"
+        required: true
+        default: "mafra-rionegro"
+
+jobs:
+  testar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r coletor/requirements.txt
+      - name: Mandar o boletim atual como teste
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CIDADE: ${{ inputs.cidade }}
+        run: python -m coletor.alertas --teste --cidade "$CIDADE"

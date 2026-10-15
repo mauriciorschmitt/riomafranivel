@@ -625,3 +625,14 @@ def test_carimbo_igual_no_windows_e_no_linux(tmp_path, monkeypatch):
         html = (tmp_path / "index.html").read_bytes().replace(b"\r\n", b"\n")
         versoes.append((html, (tmp_path / "sw.js").read_bytes().replace(b"\r\n", b"\n")))
     assert versoes[0] == versoes[1]
+
+
+def test_mensagem_do_alerta():
+    from coletor import alertas
+    cfg, agora, bruto, maximas, treino = _dados_demo()
+    saida = processar(cfg, bruto, mod.modelo_heuristico({}), maximas)
+    subiu = alertas.mensagem(saida, {"nivel": 0.5})
+    baixou = alertas.mensagem(saida, {"nivel": 99.0})
+    assert "subiu para" in subiu and "baixou para" in baixou
+    assert "cm/h" not in subiu and "Defesa Civil 199" in subiu
+    assert "está em" in alertas.mensagem(saida, None, teste=True)
