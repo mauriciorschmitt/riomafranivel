@@ -205,7 +205,20 @@ def carimbar_versao() -> bool:
             continue
         versao = hashlib.sha1(arquivo.read_bytes()).hexdigest()[:8]
         html = re.sub(r'(["\'])' + re.escape(nome) + r'(\?v=[0-9a-f]*)?(["\'])', r"\g<1>" + f"{nome}?v={versao}" + r"\g<3>", html)
-    if html != original:
+    mudou = html != original
+    if mudou:
         indice.write_text(html, encoding="utf-8")
-        return True
-    return False
+    # o service worker guarda a página, o estilo e o código para uso sem internet: com
+    # uma versão nova no sw.js, o navegador instala o novo e apaga os arquivos antigos
+    sw = PASTA_SITE / "sw.js"
+    if sw.exists():
+        partes = [html.encode("utf-8")] + [
+            (PASTA_SITE / n).read_bytes() for n in ("estilo.css", "app.js", "manifest.webmanifest") if (PASTA_SITE / n).exists()
+        ]
+        versao = hashlib.sha1(b"".join(partes)).hexdigest()[:8]
+        codigo = sw.read_text(encoding="utf-8")
+        novo = re.sub(r'const VERSAO = "[^"]*";', f'const VERSAO = "{versao}";', codigo, count=1)
+        if novo != codigo:
+            sw.write_text(novo, encoding="utf-8")
+            mudou = True
+    return mudou

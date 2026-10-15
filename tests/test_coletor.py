@@ -428,6 +428,20 @@ def test_carimbo_de_versao_no_index(tmp_path, monkeypatch):
     assert base.carimbar_versao() is True             # código novo: versão nova
 
 
+def test_carimbo_troca_a_versao_do_service_worker(tmp_path, monkeypatch):
+    monkeypatch.setattr(base, "PASTA_SITE", tmp_path)
+    (tmp_path / "index.html").write_text('<script src="app.js"></script>', encoding="utf-8")
+    (tmp_path / "app.js").write_text("console.log(1)", encoding="utf-8")
+    (tmp_path / "sw.js").write_text('const VERSAO = "0";\nconst X = 1;', encoding="utf-8")
+    assert base.carimbar_versao() is True
+    v1 = re.search(r'VERSAO = "(\w+)"', (tmp_path / "sw.js").read_text(encoding="utf-8")).group(1)
+    assert v1 != "0" and base.carimbar_versao() is False
+    (tmp_path / "app.js").write_text("console.log(2)", encoding="utf-8")
+    assert base.carimbar_versao() is True
+    v2 = re.search(r'VERSAO = "(\w+)"', (tmp_path / "sw.js").read_text(encoding="utf-8")).group(1)
+    assert v2 != v1 and "const X = 1;" in (tmp_path / "sw.js").read_text(encoding="utf-8")
+
+
 def test_hoje_mostra_o_que_foi_previsto_ontem():
     cfg, agora, bruto, maximas, treino = _dados_demo()
     ontem = (agora.date() - dt.timedelta(days=1)).isoformat()

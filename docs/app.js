@@ -18,9 +18,18 @@
   const css = (nome) => getComputedStyle(document.documentElement).getPropertyValue(nome).trim();
 
   let D = null;
+  let slugAtual = null;
+  let guardado = false; // true quando o boletim veio da cópia guardada no aparelho (sem internet)
   const graficos = {};
 
   // ------------------------------------------------------------ dados
+  async function buscarBoletim(slug) {
+    const r = await fetch(`dados/${encodeURIComponent(slug)}.json`, { cache: "no-cache" });
+    if (!r.ok) throw new Error(`Não encontrei os dados de "${slug}". Confira o nome da cidade no endereço.`);
+    guardado = r.headers.get("x-regua-guardado") === "1";
+    return r.json();
+  }
+
   async function carregar() {
     if (window.__DADOS__) return window.__DADOS__;
     const params = new URLSearchParams(location.search);
@@ -32,9 +41,38 @@
     const slug = params.get("cidade") || cidades[0]?.slug;
     if (!slug) throw new Error("Nenhuma cidade publicada ainda. Rode o coletor para gerar docs/dados/<cidade>.json.");
     if (cidades.length > 1) montarSeletor(cidades, slug);
-    const r = await fetch(`dados/${encodeURIComponent(slug)}.json`, { cache: "no-cache" });
-    if (!r.ok) throw new Error(`Não encontrei os dados de "${slug}". Confira o nome da cidade no endereço.`);
-    return r.json();
+    slugAtual = slug;
+    try {
+      return await buscarBoletim(slug);
+    } catch (e) {
+      if (e instanceof TypeError) throw new Error("Sem internet, e este aparelho ainda não tem um boletim guardado. Abra o site uma vez com internet para ele ficar disponível sem sinal.");
+      throw e;
+    }
+  }
+
+  // com o app aberto: busca o boletim novo de tempos em tempos e quando a internet volta
+  const INTERVALO_ATUALIZACAO_MS = 5 * 60 * 1000;
+  async function atualizarBoletim() {
+    if (!slugAtual || window.__DADOS__) return;
+    try {
+      const novo = await buscarBoletim(slugAtual);
+      if (novo.gerado_em !== D.gerado_em) {
+        D = novo;
+        renderTudo();
+      }
+    } catch (_) { /* sem rede: fica com o que já está na tela */ }
+    renderTopo();
+    atualizarAvisoOffline();
+  }
+
+  function atualizarAvisoOffline() {
+    const aviso = $("#offline-aviso");
+    const semRede = navigator.onLine === false || guardado;
+    aviso.hidden = !semRede;
+    if (!semRede || !D) return;
+    const minutos = minutosDesde(D.atual.hora);
+    const ha = minutos < 90 ? `${minutos} min` : minutos < 2880 ? `${Math.round(minutos / 60)} horas` : `${Math.round(minutos / 1440)} dias`;
+    aviso.textContent = `Sem internet ou sinal fraco: mostrando o boletim das ${horaCurta(D.atual.hora)} de ${dataCurta(D.atual.hora)} (há ${ha}), guardado neste aparelho. Em risco, ligue 199.`;
   }
 
   function montarSeletor(cidades, atual) {
@@ -1208,11 +1246,11 @@
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
       navigator.serviceWorker.register("sw.js").catch(() => { /* sem app, o site continua funcionando */ });
     }
-    const aviso = $("#offline-aviso");
-    const atualizarAviso = () => { aviso.hidden = navigator.onLine !== false; };
-    window.addEventListener("online", atualizarAviso);
-    window.addEventListener("offline", atualizarAviso);
-    atualizarAviso();
+    window.addEventListener("online", atualizarBoletim);
+    window.addEventListener("offline", atualizarAvisoOffline);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") atualizarBoletim(); });
+    setInterval(atualizarBoletim, INTERVALO_ATUALIZACAO_MS);
+    setInterval(() => { if (D) { renderTopo(); atualizarAvisoOffline(); } }, 60 * 1000); // idade da leitura
 
     const instalado = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
     if (instalado) return;
@@ -1253,6 +1291,7 @@
     abaAtual = APELIDOS[location.hash.slice(1)] || (ABAS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "agora");
     renderTudo();
     abrirAba(abaAtual, false);
+    atualizarAvisoOffline();
   }
 
 
