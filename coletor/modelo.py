@@ -5,10 +5,15 @@ que prevê quanto o rio sobe ou desce de um dia para o outro. Ela é aplicada
 dia a dia, usando a chuva prevista, para montar os próximos 7 dias.
 
 Variáveis de cada dia d (prevendo h[d+1] - h[d]):
-  nível atual, variação do último dia, chuva do dia seguinte, chuva de hoje e
-  dos dois dias anteriores, índice de chuva antecedente (proxy de solo
-  encharcado), chuva × solo encharcado, e variação do nível rio acima
-  (deslocada pelo tempo de viagem da onda de cheia, se houver estação).
+  nível atual, variações dos últimos dias, chuva de amanhã até 5 dias atrás,
+  índice de chuva antecedente (proxy de solo encharcado), interações com o
+  nível e a chuva forte, e variação do nível rio acima (deslocada pelo tempo
+  de viagem da onda de cheia, se houver estação).
+
+Quando a estação informa vazão, um modelo hidrológico (hidrologico.py, GR4J)
+também prevê os 7 dias, e a previsão final é uma média ponderada das duas: a
+regressão acerta melhor o dia seguinte; o modelo hidrológico, a cheia que
+continua subindo dias depois da chuva.
 
 A incerteza vem de um teste retroativo: o modelo é rodado a partir de cada dia
 do período de validação e o erro de cada horizonte (1 a 7 dias) vira o desvio
@@ -25,24 +30,35 @@ import math
 
 import numpy as np
 
+from . import hidrologico
+
 HORIZONTE = 7
 K_API = 0.85  # decaimento diário do índice de chuva antecedente
 NOMES = [
     "nivel",
     "variacao_1d",
+    "variacao_anterior",
+    "variacao_3d",
     "chuva_amanha",
     "chuva_hoje",
     "chuva_ontem",
-    "chuva_anteontem",
+    "chuva_2d_atras",
+    "chuva_3d_atras",
+    "chuva_4d_atras",
+    "chuva_5d_atras",
     "chuva_antecedente",
-    "chuva_x_solo",
     "montante_variacao",
     "chuva_3d",
     "chuva_3d_quadrado",
     "chuva_3d_x_solo",
     "nivel_x_chuva_3d",
     "nivel_quadrado",
+    "subida_ao_quadrado",
+    "subida_x_nivel",
 ]
+DIAS_PASSADOS = 3  # dias de nível anteriores que o vetor usa
+# peso da regressão em cada dia à frente; o resto vem do modelo hidrológico
+PESOS_REGRESSAO = [0.8, 0.65, 0.5, 0.4, 0.3, 0.3, 0.3]
 MIN_DIAS_TREINO = 120
 MIN_ANALOGOS = 30
 
@@ -70,15 +86,16 @@ def _vetor(d, h, chuva, api, montante, atraso):
             variacao_montante = montante[a] - montante[b]
     api_ontem = api.get(d - um, 0.0)
     chuva_3d = p(d + um) + p(d) + p(d - um)
+    v1 = h[d] - h[d - um]
+    subida = max(v1, 0.0)
     return [
         h[d],
-        h[d] - h[d - um],
-        p(d + um),
-        p(d),
-        p(d - um),
-        p(d - 2 * um),
+        v1,
+        h[d - um] - h[d - 2 * um],
+        h[d] - h[d - 3 * um],
+        # chuva de amanhã até 5 dias atrás: numa bacia grande a água leva dias para chegar
+        *(p(d + um - i * um) for i in range(7)),
         api_ontem,
-        p(d + um) * api_ontem / 100.0,
         variacao_montante,
         # termos não lineares: a resposta a chuva forte e com o rio alto não é proporcional
         chuva_3d,
@@ -86,6 +103,9 @@ def _vetor(d, h, chuva, api, montante, atraso):
         chuva_3d * api_ontem / 1000.0,
         h[d] * chuva_3d / 10.0,
         h[d] ** 2 / 10.0,
+        # cheia que está subindo rápido costuma continuar subindo
+        v1 * subida,
+        subida * h[d],
     ]
 
 
@@ -102,7 +122,8 @@ def montar_matriz(niveis, chuva, montante=None, atraso=0):
     um = dt.timedelta(days=1)
     X, y, usadas = [], [], []
     for d in datas:
-        if d - um in niveis and d + um in niveis and (d + um) in chuva and d in chuva:
+        passado = all(d - i * um in niveis for i in range(1, DIAS_PASSADOS + 1))
+        if passado and d + um in niveis and (d + um) in chuva and d in chuva:
             X.append(_vetor(d, niveis, chuva, api, montante, atraso))
             y.append(niveis[d + um] - niveis[d])
             usadas.append(d)
@@ -122,7 +143,7 @@ def _ajustar_ridge(X, y, alfa=1.0):
 def _prever_delta(modelo, x):
     if modelo["tipo"] == "heuristico":
         p = modelo["parametros"]
-        nivel, _, amanha, hoje, ontem, _, api, _, mont = x[:9]
+        nivel, amanha, hoje, ontem, api, mont = x[0], x[4], x[5], x[6], x[11], x[12]
         saturacao = min(1.5, 0.6 + api / 100.0)
         return (
             -p["recessao"] * max(0.0, nivel - p["nivel_base"])
@@ -155,31 +176,65 @@ def chuva_acumulada(chuva, inicio, k):
     return sum(chuva.get(inicio + dt.timedelta(days=j), 0.0) for j in range(k + 2))
 
 
-def teste_retroativo(modelo, niveis, chuva, montante, atraso, inicios):
+def combinar(regressao, hidro, piso=0.0):
+    """Média ponderada, dia a dia, da regressão com o modelo hidrológico."""
+    saida = list(regressao)
+    for k, (w, h) in enumerate(zip(PESOS_REGRESSAO, hidro)):
+        saida[k] = max(piso, w * regressao[k] + (1 - w) * h)
+    return saida
+
+
+def teste_retroativo(modelo, niveis, chuva, montante, atraso, inicios, hidro=None):
     """Roda o modelo a partir de cada dia e devolve, por horizonte, pares (chuva acumulada, erro).
 
     erro = previsto - observado (negativo quando o rio subiu mais que o previsto).
+    Cada par leva também a variação do rio no dia de partida (subindo ou descendo).
+    Com `hidro` (modelo hidrológico), testa a combinação das duas previsões.
     """
+    um = dt.timedelta(days=1)
+    inicios = [s for s in inicios if all(s - i * um in niveis for i in range(1, DIAS_PASSADOS + 1))]
+    previsoes_hidro = hidrologico.prever_varios(hidro, inicios, niveis, chuva) if hidro and inicios else {}
     pares = [[] for _ in range(HORIZONTE)]
     for s in inicios:
         base = {d: v for d, v in niveis.items() if d <= s}
-        if s - dt.timedelta(days=1) not in base:
-            continue
         previstos = simular(modelo, s, base, chuva, montante, atraso)
+        if s in previsoes_hidro:
+            previstos = combinar(previstos, previsoes_hidro[s], modelo.get("nivel_minimo", 0.0))
         for k, valor in enumerate(previstos):
             alvo = s + dt.timedelta(days=k + 1)
             if alvo in niveis:
-                pares[k].append((chuva_acumulada(chuva, s, k), valor - niveis[alvo]))
+                pares[k].append((chuva_acumulada(chuva, s, k), valor - niveis[alvo], niveis[s] - niveis[s - um]))
     return pares
 
 
 def erro_por_horizonte(modelo, niveis, chuva, montante, atraso, inicios):
     pares = teste_retroativo(modelo, niveis, chuva, montante, atraso, inicios)
-    return [float(np.sqrt(np.mean([e * e for _, e in p]))) if p else None for p in pares]
+    return [float(np.sqrt(np.mean([e * e for _, e, *_ in p]))) if p else None for p in pares]
 
 
-def treinar(niveis, chuva, montante=None, atraso=0, config_modelo=None) -> dict:
-    """Treina com 80% do período, valida nos 20% finais e reajusta com tudo."""
+def data_corte(niveis, chuva) -> dt.date | None:
+    """Primeiro dia da validação (os 20% finais), o mesmo que `treinar` usa."""
+    _, y, datas = montar_matriz(niveis, chuva)
+    return datas[int(len(y) * 0.8)] if len(y) >= MIN_DIAS_TREINO else None
+
+
+def calibrar_hidrologico(niveis, vazoes, chuva, area_km2, ate=None):
+    """Modelo hidrológico com os dados até `ate` (exclusive). None se não houver vazão suficiente."""
+    if not vazoes or not area_km2:
+        return None
+    filtro = (lambda d: d < ate) if ate else (lambda d: True)
+    return hidrologico.treinar(
+        {d: v for d, v in niveis.items() if filtro(d)}, {d: v for d, v in vazoes.items() if filtro(d)},
+        chuva, float(area_km2),
+    )
+
+
+def treinar(niveis, chuva, montante=None, atraso=0, config_modelo=None, hidro=None) -> dict:
+    """Treina com 80% do período, valida nos 20% finais e reajusta com tudo.
+
+    `hidro`: par (modelo hidrológico calibrado só com os 80% iniciais, modelo
+    calibrado com tudo), de `calibrar_hidrologico`. Sem ele, só a regressão.
+    """
     config_modelo = config_modelo or {}
     niveis = {_d(k): v for k, v in niveis.items() if v is not None}
     chuva = {_d(k): v for k, v in chuva.items() if v is not None}
@@ -189,11 +244,12 @@ def treinar(niveis, chuva, montante=None, atraso=0, config_modelo=None) -> dict:
         return modelo_heuristico(config_modelo, motivo=f"apenas {len(y)} dias com nível e chuva (mínimo {MIN_DIAS_TREINO})")
 
     corte = int(len(y) * 0.8)
+    hidro_parcial, hidro_final = hidro if hidro and hidro[0] and hidro[1] else (None, None)
     parcial = {"tipo": "calibrado", **_ajustar_ridge(X[:corte], y[:corte]), "nivel_minimo": float(min(niveis.values()))}
-    pares = teste_retroativo(parcial, niveis, chuva, montante, atraso, datas[corte:-1])
+    pares = teste_retroativo(parcial, niveis, chuva, montante, atraso, datas[corte:-1], hidro_parcial)
     if any(len(p) < MIN_ANALOGOS for p in pares):
-        pares = teste_retroativo(parcial, niveis, chuva, montante, atraso, datas[:-1])
-    rmse = [float(np.sqrt(np.mean([e * e for _, e in p]))) if p else None for p in pares]
+        pares = teste_retroativo(parcial, niveis, chuva, montante, atraso, datas[:-1], hidro_parcial)
+    rmse = [float(np.sqrt(np.mean([e * e for _, e, *_ in p]))) if p else None for p in pares]
 
     # comparação justa: o mesmo período, com o palpite "o rio fica como está hoje"
     inicios_validacao = datas[corte:-1]
@@ -206,7 +262,7 @@ def treinar(niveis, chuva, montante=None, atraso=0, config_modelo=None) -> dict:
     validacao = {
         "periodo": [inicios_validacao[0].isoformat(), inicios_validacao[-1].isoformat()] if inicios_validacao else None,
         "n_dias": len(inicios_validacao),
-        "erro_medio": [round(float(np.mean([abs(e) for _, e in p])), 3) if p else None for p in pares],
+        "erro_medio": [round(float(np.mean([abs(e) for _, e, *_ in p])), 3) if p else None for p in pares],
         "erro_palpite": [round(float(np.mean(v)), 3) if v else None for v in palpite],
     }
 
@@ -218,12 +274,13 @@ def treinar(niveis, chuva, montante=None, atraso=0, config_modelo=None) -> dict:
         "variaveis": NOMES,
         "nivel_minimo": float(min(niveis.values())),
         "rmse_horizonte": [round(r, 3) for r in rmse],
-        "erros_validacao": [[[round(c, 1), round(e, 3)] for c, e in p] for p in pares],
+        "erros_validacao": [[[round(c, 1), round(e, 3), round(v, 2)] for c, e, v in p] for p in pares],
         "validacao": validacao,
         "n_dias": int(len(y)),
         "periodo": [datas[0].isoformat(), datas[-1].isoformat()],
         "treinado_em": dt.datetime.now().isoformat(timespec="minutes"),
         "atraso_montante_dias": atraso,
+        **({"hidrologico": hidro_final} if hidro_final else {}),
     }
 
 
@@ -325,8 +382,16 @@ def _normal_acima(limite, media, desvio):
     return 0.5 * math.erfc((limite - media) / (desvio * math.sqrt(2)))
 
 
-def _faixa_empirica(pares, chuva_prevista):
-    """Erros nas situações de validação com chuva mais parecida com a prevista.
+ESCALA_VARIACAO_M = 0.5  # 0,5 m/dia de diferença na variação do rio "pesa" como 1 unidade de log(chuva)
+
+
+def _faixa_empirica(pares, chuva_prevista, variacao=None):
+    """Erros nas situações de validação mais parecidas com a de agora.
+
+    Parecida = chuva acumulada parecida (em escala log) e, quando os pares têm
+    essa informação, o rio indo para o mesmo lado (subindo ou descendo, e quanto).
+    Um rio descendo com tempo seco erra pouco; misturar com casos de cheia
+    subindo inventaria chance de inundação onde não há.
 
     Devolve (erros centrados, viés). A faixa usa os erros CENTRADOS (tira-se a
     mediana), para mostrar só a incerteza em volta da linha central; senão ela
@@ -334,8 +399,14 @@ def _faixa_empirica(pares, chuva_prevista):
     negativa quando o modelo costuma ficar abaixo do que o rio fez) é usado à
     parte, para corrigir a própria linha central.
     """
-    ordenados = sorted(pares, key=lambda p: abs(math.log1p(p[0]) - math.log1p(chuva_prevista)))
-    erros = np.array([e for _, e in ordenados[: max(MIN_ANALOGOS, len(ordenados) * 2 // 5)]])
+    def distancia(p):
+        d = abs(math.log1p(p[0]) - math.log1p(chuva_prevista))
+        if variacao is not None and len(p) > 2:
+            d += abs(p[2] - variacao) / ESCALA_VARIACAO_M
+        return d
+
+    ordenados = sorted(pares, key=distancia)
+    erros = np.array([p[1] for p in ordenados[: max(MIN_ANALOGOS, len(ordenados) * 2 // 5)]])
     vies = float(np.median(erros))
     return erros - vies, vies
 
@@ -383,14 +454,15 @@ def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, mon
     """
     niveis = {_d(k): v for k, v in niveis_diarios.items() if v is not None}
     niveis[hoje] = nivel_atual
-    ontem = hoje - dt.timedelta(days=1)
-    niveis.setdefault(ontem, nivel_atual)
+    for i in range(1, DIAS_PASSADOS + 1):  # dia sem leitura: repete o seguinte
+        niveis.setdefault(hoje - dt.timedelta(days=i), niveis[hoje - dt.timedelta(days=i - 1)])
     chuva = {_d(k): v for k, v in chuva.items() if v is not None}
     montante = {_d(k): v for k, v in (montante or {}).items() if v is not None}
     atraso = modelo.get("atraso_montante_dias", 0)
     piso = modelo.get("nivel_minimo", 0.0)
     validacao = modelo.get("erros_validacao") or []
     empirico = len(validacao) == HORIZONTE and all(len(p) >= MIN_ANALOGOS for p in validacao)
+    variacao_hoje = niveis[hoje] - niveis[hoje - dt.timedelta(days=1)]
     modelo_pico = modelo.get("pico")
     residuo_pico = np.array(modelo_pico["residuos"] if modelo_pico else RESIDUO_PICO_PADRAO)
     fatores_faixa = list(fatores_faixa or []) + [1.0] * HORIZONTE
@@ -406,6 +478,9 @@ def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, mon
     usa_cenarios = len(chuvas) > 1
     # um dia a mais que o horizonte: o pico do 7º dia depende de o rio seguir subindo ou não
     medias_cenario = [simular(modelo, hoje, niveis, c, montante, atraso, dias=HORIZONTE + 1) for c in chuvas]
+    if modelo.get("hidrologico"):
+        hidro = hidrologico.prever(modelo["hidrologico"], hoje, niveis, chuvas)
+        medias_cenario = [combinar(mc, hc, piso) for mc, hc in zip(medias_cenario, hidro)]
 
     saida = []
     margens = {"abaixo": 0.0, "acima": 0.0, "pico_abaixo": 0.0, "pico_acima": 0.0}
@@ -414,7 +489,7 @@ def prever(modelo, hoje: dt.date, nivel_atual: float, niveis_diarios, chuva, mon
         centros, amostras, picos, amostras_pico = [], [], [], []
         for c, mc in zip(chuvas, medias_cenario):
             if empirico:
-                erros, vies = _faixa_empirica(validacao[k], chuva_acumulada(c, hoje, k))
+                erros, vies = _faixa_empirica(validacao[k], chuva_acumulada(c, hoje, k), variacao_hoje)
                 centro = mc[k] - vies * correcao_vies
                 am = centro - erros * fator_empirico
             else:

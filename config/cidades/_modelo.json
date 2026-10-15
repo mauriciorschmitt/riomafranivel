@@ -12,8 +12,9 @@
     "nome": "",
     "lat": -27.0,
     "lon": -49.0,
+    "area_km2": null,
     "offset_m": 0.0,
-    "_nota": "Código da estação telemétrica da ANA (python ferramentas/buscar_estacoes.py <cidade>).",
+    "_nota": "Código da estação telemétrica da ANA (python ferramentas/buscar_estacoes.py <cidade>). area_km2: área de drenagem da estação (no inventário da ANA); com ela e com a vazão da telemetria, a previsão usa também o modelo hidrológico.",
     "copel": ""
   },
   "montante": [

@@ -108,6 +108,30 @@ def completar_maximas_telemetria(config, leituras_cache, ultimo_ano, agora, ajus
     return resultado
 
 
+def preparar_hidrologico(config, leituras, niveis, chuva):
+    """Calibra o modelo hidrológico duas vezes: só com os 80% iniciais (para a validação) e com tudo."""
+    area = config["estacao"].get("area_km2")
+    vazoes = {}
+    for l in leituras:
+        if l.get("vazao_m3s") is not None and l["nivel_m"] is not None:
+            vazoes.setdefault(l["hora"].date(), []).append(l["vazao_m3s"])
+    vazoes = {d: statistics.fmean(v) for d, v in vazoes.items() if len(v) >= 8}
+    if not area or not vazoes:
+        print("  modelo hidrológico: sem vazão na telemetria ou sem estacao.area_km2; segue só a regressão")
+        return None
+    chuva_d = {dt.date.fromisoformat(k): v for k, v in chuva.items() if v is not None}
+    corte = mod.data_corte(niveis, chuva_d)
+    if corte is None:
+        return None
+    parcial = mod.calibrar_hidrologico(niveis, vazoes, chuva_d, area, ate=corte)
+    final = mod.calibrar_hidrologico(niveis, vazoes, chuva_d, area)
+    if not final:
+        print("  modelo hidrológico: poucos dias com vazão; segue só a regressão")
+        return None
+    print(f"  modelo hidrológico (GR4J): NSE {final['nse']:.2f} com {final['n_dias']} dias")
+    return parcial, final
+
+
 def treinar_cidade(slug: str, baixar_historico: bool = False) -> dict:
     config = base.carregar_config(slug)
     agora = agora_local()
@@ -123,6 +147,7 @@ def treinar_cidade(slug: str, baixar_historico: bool = False) -> dict:
     )
     chuva = completar_chuva(slug, config["bacia"]["pontos"], dias, agora.date())
     niveis = media_diaria(leituras, float(config["estacao"].get("offset_m", 0.0)))
+    hidro = preparar_hidrologico(config, leituras, niveis, chuva)
 
     montante = None
     cfg_m = next((m for m in config.get("montante", []) if base.chave_montante(m)), None)
@@ -145,12 +170,12 @@ def treinar_cidade(slug: str, baixar_historico: bool = False) -> dict:
         # testa quantos dias a cheia leva para chegar e fica com o que erra menos em 1 a 3 dias
         candidatos = {}
         for atraso in range(0, 4):
-            m = mod.treinar(niveis, chuva, montante, atraso, cfg_prev)
+            m = mod.treinar(niveis, chuva, montante, atraso, cfg_prev, hidro)
             if m["tipo"] == "calibrado":
                 candidatos[atraso] = m
                 print(f"  rio acima com {atraso} dia(s) de atraso: erro 1-3 dias = "
                       f"{sum(m['rmse_horizonte'][:3]) / 3:.2f} m")
-        sem = mod.treinar(niveis, chuva, None, 0, cfg_prev)
+        sem = mod.treinar(niveis, chuva, None, 0, cfg_prev, hidro)
         melhor = min(candidatos, key=lambda a: sum(candidatos[a]["rmse_horizonte"][:3])) if candidatos else None
         if melhor is not None and sum(candidatos[melhor]["rmse_horizonte"][:3]) < sum(sem["rmse_horizonte"][:3]):
             modelo = {**candidatos[melhor], "usa_montante": True}
@@ -160,7 +185,7 @@ def treinar_cidade(slug: str, baixar_historico: bool = False) -> dict:
             modelo = sem
             print(f"  {cfg_m['nome']} não melhorou a previsão; modelo segue só com chuva")
     else:
-        modelo = mod.treinar(niveis, chuva, None, 0, cfg_prev)
+        modelo = mod.treinar(niveis, chuva, None, 0, cfg_prev, hidro)
 
     if modelo["tipo"] == "calibrado":
         maximas_dia = media_diaria(leituras, float(config["estacao"].get("offset_m", 0.0)), max)
