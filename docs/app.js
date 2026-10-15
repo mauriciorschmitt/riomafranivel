@@ -1081,55 +1081,44 @@
   // ------------------------------------------------------------ plano da família (preenchível)
   const MOCHILA = ["Documentos em saco plástico", "Remédios e receitas", "Carregador e bateria extra", "Lanterna e pilhas",
     "Roupa, agasalho e cobertor", "Água e comida para 2 dias", "Ração, coleira e remédios dos animais"];
-  const CAMPOS_PLANO = [
-    { id: "familia", rotulo: "Família", tipo: "text", dica: "Ex.: Família Souza" },
-    { id: "lugar", rotulo: "Nossa casa", tipo: "local" },
-    { id: "sair", rotulo: "Saímos de casa com o rio em", tipo: "text", dica: "Ex.: 6,50 m", ajuda: "Combine uma altura um pouco abaixo da que alaga a sua rua." },
-    { id: "abrigo", rotulo: "Vamos para", tipo: "abrigo", dica: "Abrigo ou casa de parente" },
-    { id: "encontro", rotulo: "Ponto de encontro", tipo: "text", dica: "Se a família se separar" },
-    { id: "busca", rotulo: "Quem busca crianças e idosos", tipo: "text" },
-    { id: "animais", rotulo: "Animais vão para", tipo: "text" },
-    { id: "telefones", rotulo: "Telefones da família", tipo: "area", dica: "Nome e número de cada um" },
-  ];
+  const CAMPOS_PLANO = ["familia", "lugar", "sair", "abrigo", "encontro", "busca", "animais", "telefones"];
   const chavePlano = () => `regua-viva:${D.config.slug}:plano`;
   function lerPlano() {
     try { return JSON.parse(localStorage.getItem(chavePlano()) || "{}"); } catch (_) { return {}; }
   }
   function salvarPlano() {
     const plano = { mochila: $$("#plano-conteudo [data-mochila]").filter((c) => c.checked).map((c) => c.dataset.mochila) };
-    CAMPOS_PLANO.forEach((f) => { const el = $(`#plano-${f.id}`); if (el) plano[f.id] = el.value.trim(); });
+    CAMPOS_PLANO.forEach((id) => { const el = $(`#plano-${id}`); if (el) plano[id] = el.value.trim(); });
     try { localStorage.setItem(chavePlano(), JSON.stringify(plano)); } catch (_) { /* sem armazenamento: só não fica salvo */ }
+    atualizarPlanoVivo(plano);
     return plano;
   }
   const siteDaCidade = () => D.config.url_site || location.href.split("#")[0].split("?")[0];
-
-  function textoPlano(plano) {
-    const c = D.config;
-    const local = listaLocais().find((x) => x.nome === plano.lugar);
-    const linhas = [`*Plano da família para cheias*${plano.familia ? ` (${plano.familia})` : ""}`, `${c.rio}, ${c.local}`, ""];
-    const item = (rotulo, valor) => { if (valor) linhas.push(`*${rotulo}:* ${valor}`); };
-    item("Nossa casa", local ? `${local.nome} (a água chega lá com ${fmt(local.cota)} m)` : plano.lugar);
-    item("Saímos de casa com o rio em", plano.sair);
-    item("Vamos para", plano.abrigo);
-    item("Ponto de encontro", plano.encontro);
-    item("Quem busca crianças e idosos", plano.busca);
-    item("Animais vão para", plano.animais);
-    if (plano.telefones) linhas.push(`*Telefones da família:*\n${plano.telefones}`);
-    const prontos = MOCHILA.filter((m) => (plano.mochila || []).includes(m));
-    const faltam = MOCHILA.filter((m) => !prontos.includes(m));
-    if (prontos.length) item("Mochila pronta", prontos.join(", "));
-    if (faltam.length) item("Falta separar", faltam.join(", "));
-    linhas.push("", "Emergência: Defesa Civil 199, Bombeiros 193, SAMU 192.");
-    const orgaos = ((c.contatos || {}).orgaos || []).filter((o) => o.nome && (o.plantao || o.fixo));
-    orgaos.forEach((o) => linhas.push(`${o.nome}: ${o.plantao || o.fixo}`));
-    linhas.push("", `Nível do rio e previsão: ${siteDaCidade()}`);
-    return linhas.join("\n");
+  // "6,5" ou "6.5 m" vira "6,50 m"; o que não for número fica como a pessoa escreveu
+  function alturaSair(valor) {
+    const n = parseFloat(String(valor || "").replace(",", ".").replace(/[^\d.]/g, ""));
+    return Number.isFinite(n) && n > 0 && n < 40 ? `${fmt(n)} m` : (valor || "").trim();
   }
 
-  function mandarPlano() {
-    const texto = textoPlano(salvarPlano());
-    // wa.me abre o WhatsApp (app no celular, WhatsApp Web no computador) com a mensagem pronta
-    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank", "noopener");
+  // partes do plano que mudam enquanto a pessoa preenche (sem redesenhar o formulário)
+  function atualizarPlanoVivo(plano) {
+    const local = listaLocais().find((x) => x.nome === plano.lugar);
+    const info = $("#plano-lugar-info");
+    if (info) info.textContent = local ? `A água chega lá com ${fmt(local.cota)} m. Agora o rio está em ${fmt(D.atual.nivel)} m.` : "";
+    const sugestoes = $("#plano-sugestoes");
+    if (sugestoes) {
+      const opcoes = local ? [1, 0.5].map((antes) => local.cota - antes).filter((v) => v > 0) : [];
+      // só redesenha se mudou: senão um toque na sugestão (que salva o campo anterior) perde o botão
+      const chave = opcoes.map((v) => fmt(v)).join("|");
+      if (sugestoes.dataset.chave !== chave) {
+        sugestoes.dataset.chave = chave;
+        sugestoes.innerHTML = opcoes.map((v) => `<button type="button" class="chip" data-sair="${fmt(v)}">${fmt(v)} m</button>`).join("");
+      }
+      sugestoes.hidden = !opcoes.length;
+    }
+    const prontos = (plano.mochila || []).length;
+    const progresso = $("#plano-mochila-progresso");
+    if (progresso) progresso.textContent = prontos === MOCHILA.length ? "Tudo pronto." : `${prontos} de ${MOCHILA.length} prontos`;
   }
 
   function renderPlano() {
@@ -1140,26 +1129,45 @@
     const plano = lerPlano();
     if (!plano.lugar) plano.lugar = localEscolhido()?.nome || "";
     const locais = [...listaLocais()].sort((a, b) => a.cota - b.cota);
-    const controle = (f) => {
-      const valor = esc(plano[f.id] || "");
-      const dica = f.dica ? ` placeholder="${esc(f.dica)}"` : "";
-      if (f.tipo === "area") return `<textarea id="plano-${f.id}" rows="3"${dica}>${valor}</textarea>`;
-      if (f.tipo === "local") return `<select id="plano-${f.id}"><option value="">Escolha a rua ou bairro</option>${
-        locais.map((x) => `<option value="${esc(x.nome)}"${x.nome === plano.lugar ? " selected" : ""}>${esc(x.nome)} (água chega com ${fmt(x.cota)} m)</option>`).join("")}</select>`;
-      const lista = f.tipo === "abrigo" ? ` list="plano-abrigos"` : "";
-      return `<input id="plano-${f.id}" type="text" value="${valor}"${dica}${lista} autocomplete="off">`;
-    };
-    $("#plano-conteudo").innerHTML = `<div class="plano-folha">
-      <h4>Plano da família para cheias</h4>
-      <p>${esc(c.rio)}, ${esc(c.local)}. Nível do rio e previsão: ${esc(siteDaCidade())}</p>
-      ${CAMPOS_PLANO.map((f) => `<div class="plano-campo"><label for="plano-${f.id}">${esc(f.rotulo)}${f.ajuda ? `<span class="plano-ajuda">${esc(f.ajuda)}</span>` : ""}</label>${controle(f)}</div>`).join("")}
-      <datalist id="plano-abrigos">${abrigos.map((a) => `<option value="${esc(a.nome)}${a.cidade ? ` (${esc(a.cidade)})` : ""}">`).join("")}</datalist>
-      <div><strong>Mochila pronta</strong> <span class="plano-ajuda">Marque o que já está separado.</span><ul class="plano-mochila">${
-        MOCHILA.map((m) => `<li><label><input type="checkbox" data-mochila="${esc(m)}"${(plano.mochila || []).includes(m) ? " checked" : ""}> ${esc(m)}</label></li>`).join("")}</ul></div>
-      <div><strong>Telefones</strong><div class="plano-telefones"><span>Defesa Civil 199</span><span>Bombeiros 193</span><span>SAMU 192</span><span>Polícia 190</span>${
-        orgaos.map((o) => `<span>${esc(o.nome)}: ${esc(o.plantao || o.fixo)}</span>`).join("")}</div></div>
-      ${abrigos.length ? `<div><strong>Abrigos da cidade</strong><ul class="plano-lista">${[...abrigos].sort((a, b) => (a.cidade || "").localeCompare(b.cidade || "") || (a.ordem ?? 99) - (b.ordem ?? 99)).map((a) => `<li>${esc(a.nome)}${a.endereco ? `, ${esc(a.endereco)}` : ""}${a.cidade ? ` (${esc(a.cidade)})` : ""}${a.ordem ? `: ${a.ordem === 1 ? "abre primeiro" : `${a.ordem}º a abrir`}` : ""}</li>`).join("")}</ul></div>` : ""}
+    const v = (id) => esc(plano[id] || "");
+    const texto = (id, dica = "", extra = "") => `<input id="plano-${id}" type="text" value="${v(id)}" placeholder="${esc(dica)}" autocomplete="off"${extra}>`;
+    const passo = (n, titulo, corpo) => `<section class="plano-passo"><span class="passo-num" aria-hidden="true">${n}</span><div class="passo-corpo"><h4>${titulo}</h4>${corpo}</div></section>`;
+    $("#plano-conteudo").innerHTML = `<div class="plano-form">
+      <div class="plano-cabeca">
+        <h4>Plano da família para cheias</h4>
+        <label for="plano-familia" class="sr">Nome da família</label>
+        ${texto("familia", "Nome da família (ex.: Família Souza)")}
+      </div>
+      ${passo(1, "Nossa casa", `
+        <label for="plano-lugar" class="sr">Rua ou bairro</label>
+        <select id="plano-lugar"><option value="">Escolha a rua ou bairro</option>${
+          locais.map((x) => `<option value="${esc(x.nome)}"${x.nome === plano.lugar ? " selected" : ""}>${esc(x.nome)} (${fmt(x.cota)} m)</option>`).join("")}</select>
+        <p class="plano-info" id="plano-lugar-info"></p>`)}
+      ${passo(2, "Saímos de casa com o rio em", `
+        <div class="plano-sair"><label for="plano-sair" class="sr">Altura do rio</label>${`<input id="plano-sair" type="text" inputmode="decimal" value="${esc((plano.sair || "").replace(/\s*m$/, ""))}" placeholder="6,50" autocomplete="off">`}<span>m</span></div>
+        <div class="chips" id="plano-sugestoes" hidden></div>
+        <p class="plano-ajuda">Combine uma altura antes da água chegar na casa: dá tempo de sair com calma.</p>`)}
+      ${passo(3, "Para onde vamos", `
+        <label for="plano-abrigo">Abrigo ou casa de parente</label>${texto("abrigo", "Ex.: casa da tia Maria", ' list="plano-abrigos"')}
+        <datalist id="plano-abrigos">${abrigos.map((a) => `<option value="${esc(a.nome)}${a.cidade ? ` (${esc(a.cidade)})` : ""}">`).join("")}</datalist>
+        <label for="plano-encontro">Se a família se separar, nos encontramos em</label>${texto("encontro", "Ex.: em frente à igreja matriz")}`)}
+      ${passo(4, "Quem faz o quê", `
+        <label for="plano-busca">Quem busca crianças e idosos</label>${texto("busca", "Ex.: João busca a vó Ana")}
+        <label for="plano-animais">Para onde vão os animais</label>${texto("animais", "Ex.: o Totó vai junto, com coleira")}`)}
+      ${passo(5, "Telefones da família", `
+        <label for="plano-telefones" class="sr">Telefones</label>
+        <textarea id="plano-telefones" rows="3" placeholder="Um por linha: nome e número">${v("telefones")}</textarea>`)}
+      ${passo(6, "Mochila de emergência", `
+        <p class="plano-ajuda">Marque o que já está separado. <strong id="plano-mochila-progresso"></strong></p>
+        <div class="mochila">${MOCHILA.map((m) => `<label class="mochila-item"><input type="checkbox" data-mochila="${esc(m)}"${(plano.mochila || []).includes(m) ? " checked" : ""}><span>${esc(m)}</span></label>`).join("")}</div>`)}
+      <div class="plano-referencia">
+        <div><strong>Telefones de emergência</strong><div class="plano-telefones"><span>Defesa Civil 199</span><span>Bombeiros 193</span><span>SAMU 192</span><span>Polícia 190</span>${
+          orgaos.map((o) => `<span>${esc(o.nome)}: ${esc(o.plantao || o.fixo)}</span>`).join("")}</div></div>
+        ${abrigos.length ? `<div><strong>Abrigos da cidade</strong><ul class="plano-lista">${[...abrigos].sort((a, b) => (a.cidade || "").localeCompare(b.cidade || "") || (a.ordem ?? 99) - (b.ordem ?? 99)).map((a) => `<li>${esc(a.nome)}${a.endereco ? `, ${esc(a.endereco)}` : ""}${a.cidade ? ` (${esc(a.cidade)})` : ""}${a.ordem ? `: ${a.ordem === 1 ? "abre primeiro" : `${a.ordem}º a abrir`}` : ""}</li>`).join("")}</ul></div>` : ""}
+        <p>Nível do rio e previsão: ${esc(siteDaCidade())}</p>
+      </div>
     </div>`;
+    atualizarPlanoVivo(plano);
 
     $("#orientacoes").innerHTML = c.orientacoes_url
       ? `Orientações oficiais sobre o que fazer antes, durante e depois de uma enchente: <a href="${esc(c.orientacoes_url)}" target="_blank" rel="noopener">Defesa Civil estadual</a>.`
@@ -1189,95 +1197,262 @@
     return [
       `${c.rio} em ${c.local}`,
       `${fmt(a.nivel)} m às ${hora(a.hora)} (${statusDe(a.nivel).nome}). ${tend}.`,
-      amanha?.min != null ? `Amanhã: entre ${fmt(amanha.min)} e ${fmt(amanha.max)} m${textoPico(amanha)}.` : "",
+      amanha?.min != null ? `Amanhã: deve ficar entre ${fmt(amanha.min, 1)} e ${fmt(amanha.pico_max ?? amanha.max, 1)} m.` : "",
       "Emergência: Defesa Civil 199",
     ].filter(Boolean).join("\n");
   }
 
-  // sem como mandar a imagem (computador): manda ou copia o texto do boletim
-  async function compartilharTexto(botao) {
-    const texto = `${textoBoletim()}\n${D.config.url_site || location.href.split("#")[0]}`;
-    if (navigator.share) { await navigator.share({ title: D.config.nome_app, text: texto }); return; }
-    await navigator.clipboard.writeText(texto);
-    botao.textContent = "Texto copiado: é só colar no WhatsApp";
+  // ------------------------------------------------------------ imagens (boletim e plano)
+  // Desenhadas no próprio aparelho, com 1080 px de largura (o tamanho do Instagram e do
+  // WhatsApp) e o dobro de pixels, para o texto ficar nítido. O alerta do Telegram usa a
+  // mesma imagem do boletim, gerada pelo coletor num navegador sem tela (window.ReguaViva).
+  const CORES_FAIXA = {
+    normal: ["#2E7D4F", "#FFFFFF"], atencao: ["#F2C200", "#121A1E"], alerta: ["#E8710A", "#121A1E"],
+    emergencia: ["#C62828", "#FFFFFF"], extremo: ["#5E2A84", "#FFFFFF"],
+  };
+  const IMG = { largura: 1080, margem: 64, escala: 2, papel: "#F4F6F6", tinta: "#121A1E", suave: "#45535A", agua: "#1C6E8C", vermelho: "#C62828" };
+  const fonteCond = (peso, px) => `${peso} ${px}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+  const fonteTexto = (peso, px) => `${peso} ${px}px "Atkinson Hyperlegible", Arial, sans-serif`;
+
+  async function fontesProntas() {
+    try {
+      await Promise.all([fonteCond(800, 100), fonteCond(700, 40), fonteTexto(400, 30), fonteTexto(700, 30)].map((f) => document.fonts.load(f)));
+      await document.fonts.ready;
+    } catch (_) { /* sem as fontes da web, usa as do aparelho */ }
   }
 
-  // ------------------------------------------------------------ boletim em imagem (WhatsApp)
-  function escreverQuebrando(g, texto, x, y, largura, alturaLinha) {
-    const palavras = texto.split(/\s+/);
-    let linha = "";
-    for (const p of palavras) {
-      const teste = linha ? `${linha} ${p}` : p;
-      if (g.measureText(teste).width > largura && linha) { g.fillText(linha, x, y); y += alturaLinha; linha = p; } else linha = teste;
+  function novaTela(altura) {
+    const cv = document.createElement("canvas");
+    cv.width = IMG.largura * IMG.escala;
+    cv.height = altura * IMG.escala;
+    const g = cv.getContext("2d");
+    g.scale(IMG.escala, IMG.escala);
+    return { cv, g };
+  }
+
+  // escreve quebrando as linhas; para no limite de linhas (com reticências) e devolve o y seguinte
+  function escrever(g, texto, x, y, largura, alturaLinha, maxLinhas = 99) {
+    const linhas = [];
+    for (const paragrafo of String(texto).split("\n")) {
+      let linha = "";
+      for (const p of paragrafo.split(/\s+/).filter(Boolean)) {
+        const teste = linha ? `${linha} ${p}` : p;
+        if (g.measureText(teste).width > largura && linha) { linhas.push(linha); linha = p; } else linha = teste;
+      }
+      linhas.push(linha);
     }
-    if (linha) { g.fillText(linha, x, y); y += alturaLinha; }
+    if (linhas.length > maxLinhas) {
+      linhas.length = maxLinhas;
+      linhas[maxLinhas - 1] = linhas[maxLinhas - 1].replace(/\s*\S*$/, "") + "…";
+    }
+    for (const l of linhas) { g.fillText(l, x, y); y += alturaLinha; }
     return y;
+  }
+
+  const paraPng = (cv) => new Promise((ok) => cv.toBlob(ok, "image/png"));
+  const canalAlertas = () => ((D.config.alertas || {}).telegram_canal || "").replace(/^@/, "");
+
+  // celular: abre a tela de compartilhar (WhatsApp, Instagram...); computador: baixa a imagem
+  async function compartilharImagem(blob, nomeArquivo, legenda, botao) {
+    const arquivo = new File([blob], nomeArquivo, { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+      await navigator.share({ files: [arquivo], text: legenda });
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = nomeArquivo;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    botao.textContent = "Imagem salva: é só mandar no WhatsApp ou postar no Instagram";
+  }
+
+  // ---- boletim: 1080 x 1350 (retrato do Instagram)
+  async function desenharBoletim() {
+    await fontesProntas();
+    const W = IMG.largura, H = 1350, M = IMG.margem;
+    const { cv, g } = novaTela(H);
+    const c = D.config, a = D.atual, st = statusDe(a.nivel);
+    const [cor, corTexto] = CORES_FAIXA[st.id] || CORES_FAIXA.normal;
+    g.fillStyle = IMG.papel; g.fillRect(0, 0, W, H);
+
+    // cabeçalho
+    g.fillStyle = IMG.tinta; g.fillRect(0, 0, W, 128);
+    g.fillStyle = IMG.papel; g.font = fonteCond(800, 60); g.fillText(c.nome_app.toUpperCase(), M, 86);
+    g.textAlign = "right"; g.font = fonteTexto(400, 26); g.fillStyle = "#A9B6BB";
+    g.fillText(c.rio, W - M, 56); g.fillText(c.local, W - M, 92);
+    g.textAlign = "left";
+
+    // bloco da faixa: o número grande na cor do alerta
+    const yB = 128, hB = 350;
+    g.fillStyle = cor; g.fillRect(0, yB, W, hB);
+    g.fillStyle = corTexto;
+    g.font = fonteTexto(700, 30);
+    g.fillText(`Atualizado às ${horaCurta(a.hora)} de ${SEMANA[diaSemana(a.hora)]} (${dataCurta(a.hora)})`, M, yB + 62);
+    g.font = fonteCond(800, 212);
+    const numero = fmt(a.nivel);
+    g.fillText(numero, M - 6, yB + 246);
+    const wNum = g.measureText(numero).width;
+    g.font = fonteCond(800, 84); g.fillText("m", M + wNum + 6, yB + 246);
+    g.font = fonteCond(800, 58);
+    const nomeFaixa = st.nome.toUpperCase();
+    g.fillText(nomeFaixa, M, yB + 318);
+    const wFaixa = g.measureText(nomeFaixa).width;
+    g.font = fonteCond(700, 40); g.fillText(textoTendencia(a.tendencia_cm_h)[0], M + wFaixa + 28, yB + 316);
+
+    // manchete, risco e próximo marco
+    const yDias = 958;
+    let y = yB + hB + 70;
+    const [tit, sub] = manchete();
+    g.fillStyle = IMG.tinta; g.font = fonteCond(800, 62);
+    y = escrever(g, tit, M, y, W - 2 * M, 64, 2);
+    g.font = fonteTexto(400, 33); g.fillStyle = "#26323A";
+    y = escrever(g, sub.replace(/<[^>]+>/g, ""), M, y + 6, W - 2 * M, 44, 2);
+    const prox = [...(c.regua || [])].filter((m) => m.cota != null && m.cota > a.nivel).sort((p, q) => p.cota - q.cota)[0];
+    if (prox && y < yDias - 70) {
+      const falta = prox.cota - a.nivel;
+      g.font = fonteTexto(700, 28); g.fillStyle = IMG.agua;
+      y = escrever(g, `Próximo marco: ${fmt(prox.cota)} m, ${prox.titulo.charAt(0).toLowerCase()}${prox.titulo.slice(1)} (faltam ${falta < 1 ? `${Math.round(falta * 100)} cm` : `${fmt(falta)} m`}).`, M, y + 10, W - 2 * M, 38, 2);
+    }
+    // o que fazer agora, com a barra na cor da faixa (o recado mais útil para quem recebe a imagem)
+    const fazer = (c.o_que_fazer || {})[st.id] || FAZER_PADRAO[st.id];
+    if (fazer && y < yDias - 130) {
+      const yF = y + 18;
+      g.fillStyle = IMG.tinta; g.font = fonteCond(800, 34); g.fillText("O QUE FAZER AGORA", M + 30, yF + 30);
+      g.font = fonteTexto(400, 29);
+      const yFim = escrever(g, fazer, M + 30, yF + 70, W - 2 * M - 30, 39, Math.max(1, Math.floor((yDias - 36 - (yF + 70)) / 39) + 1));
+      g.fillStyle = cor; g.fillRect(M, yF, 10, yFim - yF - 22);
+    }
+
+    // próximos 3 dias
+    g.fillStyle = IMG.tinta; g.fillRect(M, yDias, W - 2 * M, 4);
+    g.font = fonteTexto(700, 24); g.fillStyle = IMG.suave;
+    g.fillText("PRÓXIMOS DIAS · PREVISÃO EM TESTE", M, yDias + 40);
+    const colW = (W - 2 * M) / 3;
+    D.previsao_dias.slice(1, 4).forEach((d, i) => {
+      const x0 = M + i * colW;
+      const ate = d.pico_max ?? d.max ?? d.media;
+      g.fillStyle = (CORES_FAIXA[statusDe(ate).id] || CORES_FAIXA.normal)[0];
+      g.fillRect(x0, yDias + 60, colW - 28, 10);
+      g.fillStyle = IMG.suave; g.font = fonteCond(700, 36); g.fillText(nomeDia(d.data).toUpperCase(), x0, yDias + 110);
+      g.fillStyle = IMG.tinta; g.font = fonteCond(800, 68); g.fillText(`${fmt(d.media, 1)} m`, x0, yDias + 176);
+      if (d.min != null) { g.fillStyle = IMG.suave; g.font = fonteTexto(400, 24); g.fillText(`entre ${fmt(d.min, 1)} e ${fmt(ate, 1)} m`, x0, yDias + 212); }
+    });
+
+    // rodapé: site, canal de alertas e o 199
+    g.fillStyle = IMG.tinta; g.font = fonteTexto(700, 26);
+    g.fillText(siteDaCidade().replace(/^https?:\/\//, "").replace(/\/$/, ""), M, H - 132);
+    if (canalAlertas()) { g.textAlign = "right"; g.fillText(`Alertas: t.me/${canalAlertas()}`, W - M, H - 132); g.textAlign = "left"; }
+    g.fillStyle = IMG.vermelho; g.fillRect(0, H - 104, W, 104);
+    g.fillStyle = "#FFFFFF"; g.font = fonteCond(800, 50); g.fillText("EMERGÊNCIA: DEFESA CIVIL 199", M, H - 36);
+    return cv;
   }
 
   async function boletimImagem() {
     const botao = $("#boletim-imagem");
     const original = botao.textContent;
     try {
-      if (document.fonts?.ready) await document.fonts.ready;
-      const W = 1080, H = 1350;
-      const cv = document.createElement("canvas");
-      cv.width = W; cv.height = H;
-      const g = cv.getContext("2d");
-      const c = D.config, a = D.atual, st = statusDe(a.nivel);
-      const cores = { normal: ["#2E7D4F", "#fff"], atencao: ["#F2C200", "#121A1E"], alerta: ["#E8710A", "#121A1E"], emergencia: ["#C62828", "#fff"], extremo: ["#5E2A84", "#fff"] };
-      const [cor, corTexto] = cores[st.id] || cores.normal;
-      const cond = (peso, px) => `${peso} ${px}px "Barlow Condensed", "Arial Narrow", sans-serif`;
-      const corpo = (peso, px) => `${peso} ${px}px "Atkinson Hyperlegible", Arial, sans-serif`;
-      g.fillStyle = "#F4F6F6"; g.fillRect(0, 0, W, H);
-      g.fillStyle = "#121A1E"; g.fillRect(0, 0, W, 140);
-      g.fillStyle = "#F4F6F6"; g.font = cond(800, 64); g.fillText(c.nome_app.toUpperCase(), 64, 94);
-      g.fillStyle = "#45535A"; g.font = corpo(400, 32);
-      g.fillText(`${c.rio}, ${c.local}`, 64, 205);
-      g.fillText(`Leitura das ${horaCurta(a.hora)} de ${dataCurta(a.hora)}`, 64, 248);
-      g.fillStyle = "#121A1E"; g.font = cond(800, 250);
-      const numero = fmt(a.nivel);
-      g.fillText(numero, 54, 500);
-      const wNum = g.measureText(numero).width;
-      g.font = cond(800, 96); g.fillStyle = "#45535A"; g.fillText("m", 54 + wNum + 14, 500);
-      g.font = cond(800, 54);
-      const nomeFaixa = st.nome.toUpperCase();
-      const wFx = g.measureText(nomeFaixa).width;
-      g.fillStyle = cor; g.fillRect(64, 540, wFx + 48, 80);
-      g.fillStyle = corTexto; g.fillText(nomeFaixa, 88, 600);
-      g.fillStyle = "#45535A"; g.font = cond(700, 44); g.fillText(textoTendencia(a.tendencia_cm_h)[0], 64 + wFx + 76, 596);
-      const [tit, sub] = manchete();
-      g.fillStyle = "#121A1E"; g.font = cond(800, 66);
-      let yy = escreverQuebrando(g, tit, 64, 730, W - 128, 70);
-      g.font = corpo(400, 36); g.fillStyle = "#121A1E";
-      yy = escreverQuebrando(g, sub.replace(/<[^>]+>/g, ""), 64, yy + 14, W - 128, 48);
-      const topoDias = Math.max(yy + 40, 1010);
-      g.fillStyle = "#121A1E"; g.fillRect(64, topoDias, W - 128, 4);
-      D.previsao_dias.slice(1, 4).forEach((d, i) => {
-        const x0 = 64 + i * 320;
-        g.fillStyle = "#45535A"; g.font = cond(700, 38);
-        g.fillText(nomeDia(d.data).toUpperCase(), x0, topoDias + 58);
-        g.fillStyle = "#121A1E"; g.font = cond(800, 64); g.fillText(`${fmt(d.media)} m`, x0, topoDias + 124);
-        g.fillStyle = "#45535A"; g.font = corpo(400, 26);
-        if (d.min != null) g.fillText(`entre ${fmt(d.min, 1)} e ${fmt(d.max, 1)}`, x0, topoDias + 162);
-      });
-      g.fillStyle = "#45535A"; g.font = corpo(400, 28);
-      g.fillText((c.url_site || location.href.split("#")[0]).replace(/^https?:\/\//, ""), 64, H - 140);
-      g.fillStyle = "#C62828"; g.fillRect(0, H - 110, W, 110);
-      g.fillStyle = "#fff"; g.font = cond(800, 50); g.fillText("EMERGÊNCIA: DEFESA CIVIL 199", 64, H - 38);
-      const blob = await new Promise((ok) => cv.toBlob(ok, "image/png"));
-      const arquivo = new File([blob], `boletim-${c.slug}.png`, { type: "image/png" });
-      const texto = `${textoBoletim()}\n${c.url_site || location.href.split("#")[0]}`;
-      if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
-        await navigator.share({ files: [arquivo], text: texto });
-        return;
-      }
-      await compartilharTexto(botao);
+      const blob = await paraPng(await desenharBoletim());
+      await compartilharImagem(blob, `boletim-${D.config.slug}.png`, `${textoBoletim()}\n${siteDaCidade()}`, botao);
     } catch (e) {
       if (e?.name === "AbortError") return;
-      botao.textContent = "Não foi possível compartilhar";
+      botao.textContent = "Não foi possível gerar a imagem";
     }
-    setTimeout(() => { botao.textContent = original; }, 3000);
+    setTimeout(() => { botao.textContent = original; }, 3500);
   }
+
+  // ---- plano da família: 1080 de largura, altura conforme o que foi preenchido
+  function desenharPlanoEm(g, plano, desenhar) {
+    const W = IMG.largura, M = IMG.margem, c = D.config;
+    const local = listaLocais().find((x) => x.nome === plano.lugar);
+    const pintar = (fn) => { if (desenhar) fn(); };
+    pintar(() => { g.fillStyle = IMG.papel; g.fillRect(0, 0, W, 6000); });
+    // cabeçalho
+    pintar(() => {
+      g.fillStyle = IMG.tinta; g.fillRect(0, 0, W, 220);
+      g.fillStyle = IMG.papel; g.font = fonteCond(800, 66); g.fillText("PLANO DA FAMÍLIA PARA CHEIAS", M, 98);
+      g.font = fonteTexto(700, 34); g.fillStyle = "#A9B6BB";
+      g.fillText(plano.familia || `${c.rio}, ${c.local}`, M, 160);
+      if (plano.familia) { g.font = fonteTexto(400, 26); g.fillText(`${c.rio}, ${c.local}`, M, 198); }
+    });
+    let y = 220;
+    let numero = 0;
+    const passo = (titulo, linhas, destaque) => {
+      if (!linhas.filter(Boolean).length && !destaque) return;
+      numero += 1;
+      const topo = y + 36;
+      g.font = fonteTexto(400, 32);
+      let yy = topo + 92;
+      if (destaque) yy += 60;
+      const corpoInicio = yy;
+      // mede o texto (ou escreve)
+      g.fillStyle = IMG.tinta;
+      // na passada de medida, g é uma tela de rascunho: escrever nela só serve para contar as linhas
+      for (const l of linhas.filter(Boolean)) yy = escrever(g, l, M + 108, yy, W - 2 * M - 108, 42);
+      pintar(() => {
+        g.fillStyle = IMG.agua; g.fillRect(M, topo, 80, 80);
+        g.fillStyle = "#FFFFFF"; g.font = fonteCond(800, 64); g.textAlign = "center"; g.fillText(String(numero), M + 40, topo + 62); g.textAlign = "left";
+        g.fillStyle = IMG.tinta; g.font = fonteCond(800, 46); g.fillText(titulo.toUpperCase(), M + 108, topo + 54);
+        if (destaque) { g.font = fonteCond(800, 96); g.fillText(destaque, M + 108, corpoInicio - 8); }
+      });
+      y = Math.max(yy, topo + 100) + 8;
+      pintar(() => { g.fillStyle = "#CDD4D7"; g.fillRect(M, y + 18, W - 2 * M, 2); });
+      y += 20;
+    };
+    passo("Nossa casa", [local ? `${local.nome}: a água chega lá com ${fmt(local.cota)} m.` : plano.lugar]);
+    passo("Saímos de casa com o rio em", [], alturaSair(plano.sair));
+    passo("Para onde vamos", [plano.abrigo && `Vamos para: ${plano.abrigo}`, plano.encontro && `Se a família se separar: ${plano.encontro}`]);
+    passo("Quem faz o quê", [plano.busca && `Busca crianças e idosos: ${plano.busca}`, plano.animais && `Animais vão para: ${plano.animais}`]);
+    passo("Telefones da família", [plano.telefones]);
+    const prontos = new Set(plano.mochila || []);
+    passo("Mochila de emergência", MOCHILA.map((m) => `${prontos.has(m) ? "✔" : "☐"}  ${m}`));
+    // rodapé: telefones de emergência e o link da previsão
+    y += 24;
+    const orgaos = ((c.contatos || {}).orgaos || []).filter((o) => o.nome && (o.plantao || o.fixo));
+    pintar(() => {
+      g.fillStyle = IMG.tinta; g.font = fonteTexto(700, 28);
+      g.fillText("Defesa Civil 199 · Bombeiros 193 · SAMU 192 · Polícia 190", M, y + 30);
+      g.font = fonteTexto(400, 26); g.fillStyle = IMG.suave;
+      orgaos.forEach((o, i) => g.fillText(`${o.nome}: ${o.plantao || o.fixo}`, M, y + 72 + i * 36));
+    });
+    y += 72 + orgaos.length * 36 + 10;
+    pintar(() => {
+      g.fillStyle = IMG.agua; g.fillRect(0, y, W, 120);
+      g.fillStyle = "#FFFFFF"; g.font = fonteTexto(700, 28); g.fillText("Nível do rio e previsão:", M, y + 48);
+      g.font = fonteTexto(400, 28); g.fillText(siteDaCidade().replace(/^https?:\/\//, ""), M, y + 90);
+    });
+    return y + 120;
+  }
+
+  async function desenharPlano(plano) {
+    await fontesProntas();
+    const medida = document.createElement("canvas").getContext("2d");
+    const altura = Math.ceil(desenharPlanoEm(medida, plano, false));
+    const { cv, g } = novaTela(altura);
+    desenharPlanoEm(g, plano, true);
+    return cv;
+  }
+
+  async function mandarPlano() {
+    const botao = $("#plano-whatsapp");
+    const original = botao.textContent;
+    const plano = salvarPlano();
+    try {
+      const blob = await paraPng(await desenharPlano(plano));
+      const legenda = `Plano da família para cheias${plano.familia ? ` (${plano.familia})` : ""}. Nível do rio e previsão: ${siteDaCidade()}`;
+      await compartilharImagem(blob, "plano-da-familia.png", legenda, botao);
+    } catch (e) {
+      if (e?.name === "AbortError") return;
+      botao.textContent = "Não foi possível gerar a imagem";
+    }
+    setTimeout(() => { botao.textContent = original; }, 3500);
+  }
+
+  // para o coletor gerar a mesma imagem do boletim e mandar no alerta do Telegram
+  window.ReguaViva = {
+    pronto: () => D != null,
+    cartaoBoletim: async () => (await desenharBoletim()).toDataURL("image/png"),
+  };
 
   // ------------------------------------------------------------ navegação
   // ------------------------------------------------------------ abas
@@ -1332,6 +1507,13 @@
     $("#plano-whatsapp").addEventListener("click", mandarPlano);
     $("#plano-conteudo").addEventListener("input", salvarPlano);
     $("#plano-conteudo").addEventListener("change", salvarPlano);
+    // sugestões de altura para sair de casa (1 m e 50 cm antes da água chegar)
+    $("#plano-conteudo").addEventListener("click", (ev) => {
+      const chip = ev.target.closest("[data-sair]");
+      if (!chip) return;
+      $("#plano-sair").value = chip.dataset.sair;
+      salvarPlano();
+    });
     $("#plano-limpar").addEventListener("click", () => {
       if (!confirm("Apagar o plano preenchido neste celular?")) return;
       try { localStorage.removeItem(chavePlano()); } catch (_) { /* nada guardado */ }
