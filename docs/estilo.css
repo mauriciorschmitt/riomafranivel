@@ -205,16 +205,9 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 20px 48px; }
 .marco-proximo { font-size: 0.85rem; margin-top: 4px; }
 
 /* ---------- próximos dias: linha do tempo de impactos ---------- */
-.legenda { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 12px 0 0; font-size: 0.9rem; color: var(--tinta-suave); }
-.legenda span { display: inline-flex; align-items: center; gap: 8px; }
-.legenda i { display: inline-block; flex: none; }
-.leg-faixa { width: 34px; height: 14px; background: var(--agua-forte); }
-.leg-media { width: 4px; height: 20px; background: var(--tinta); }
-.leg-agora { width: 14px; height: 14px; border-radius: 50%; background: var(--regua-vermelho); border: 2px solid var(--papel); box-shadow: 0 0 0 1.5px var(--regua-vermelho); }
 .alcance .agora-ponto { position: absolute; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--regua-vermelho); border: 2px solid var(--papel); box-shadow: 0 0 0 1.5px var(--regua-vermelho); z-index: 2; }
-.impacto-texto .confere { display: block; font-size: 0.86rem; margin-top: 2px; }
+.impacto-texto .confere { display: block; font-size: 0.86rem; margin-top: 2px; color: var(--tinta-fraca); }
 .impacto-texto .confere.ok { color: var(--normal); }
-.impacto-texto .confere.fora { color: var(--alerta); }
 .impactos { list-style: none; margin: 16px 0 0; padding: 0; border-top: 2px solid var(--tinta); }
 .impacto { display: grid; grid-template-columns: 92px 112px minmax(160px, 1fr) minmax(220px, 1.1fr); gap: 16px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--linha); }
 .impacto-cabeca { padding: 8px 0 4px; font-size: 0.8rem; font-weight: 700; color: var(--tinta-fraca); align-items: end; }

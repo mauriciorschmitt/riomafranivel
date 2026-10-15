@@ -132,7 +132,7 @@
     tarja.setAttribute("aria-label", `Nível do rio: ${fmt(D.atual.nivel)} metros, ${st.nome}`);
 
     const el = $("#boletim-hora");
-    let texto = `Boletim das ${horaCurta(D.atual.hora)} de ${SEMANA[diaSemana(D.atual.hora)]}, ${dataCurta(D.atual.hora)}. Estação ANA ${c.estacao.codigo}.`;
+    let texto = `Atualizado às ${horaCurta(D.atual.hora)} de ${SEMANA[diaSemana(D.atual.hora)]} (${dataCurta(D.atual.hora)}).`;
     const minutos = minutosDesde(D.atual.hora);
     el.classList.remove("velho");
     if (D.demo) texto += " Dados fictícios de demonstração.";
@@ -147,7 +147,7 @@
   function textoTendencia(t) {
     if (t == null) return ["Tendência indisponível", ""];
     if (Math.abs(t) < 0.5) return ["Estável", "estavel"];
-    return t < 0 ? [`Baixando ${fmt(Math.abs(t), 1)} cm/h`, "desce"] : [`Subindo ${fmt(t, 1)} cm/h`, "sobe"];
+    return t < 0 ? [`Baixando ${fmt(Math.abs(t), 1)} cm por hora`, "desce"] : [`Subindo ${fmt(t, 1)} cm por hora`, "sobe"];
   }
 
   function diagnostico() {
@@ -248,7 +248,8 @@
     carimbo.textContent = st.nome;
     const [tend] = textoTendencia(a.tendencia_cm_h);
     const cota = inundacao();
-    const falta = cota != null && a.nivel < cota ? ` Faltam ${fmt(cota - a.nivel)} m para a cota de inundação (${fmt(cota)} m).` : "";
+    const distancia = (m) => (m < 1 ? `${Math.round(m * 100)} cm` : `${fmt(m)} m`);
+    const falta = cota != null && a.nivel < cota ? ` Faltam ${distancia(cota - a.nivel)} para a cota de inundação (${fmt(cota)} m).` : "";
     $("#tendencia").textContent = `${tend}.${falta}`;
     renderSpark();
 
@@ -292,7 +293,7 @@
     const el = $("#local-resultado");
     el.classList.remove("perigo");
     if (!e) {
-      el.textContent = "Escolha um lugar para saber a partir de que nível a água chega lá e se a previsão indica risco. A escolha fica guardada só neste aparelho.";
+      el.textContent = "Veja se a água pode chegar lá. A escolha fica salva só neste celular.";
       return;
     }
     const n = D.atual.nivel;
@@ -686,7 +687,7 @@
     // a escala considera só o que aparece: faixa até 3 dias, linha central depois
     const ontem = dias[0]?.previsto_ontem;
     const valores = [n, ...(ontem ? [ontem.min, ontem.max, ontem.media] : []),
-      ...dias.flatMap((d, i) => (i >= 4 ? [d.media] : i === 0 ? [] : [d.min ?? d.media, d.max ?? d.media, d.media]))].filter((v) => v != null);
+      ...dias.flatMap((d, i) => (i >= 4 ? [d.media] : i === 0 ? [] : [d.min ?? d.media, d.pico_max ?? d.max ?? d.media, d.media]))].filter((v) => v != null);
     let lo = Math.max(0, Math.floor(Math.min(...valores) - 0.5));
     let hi = Math.ceil(Math.max(...valores) + 0.5);
     const proxima = faixas().find((f) => f.cota > Math.max(...valores));
@@ -723,20 +724,19 @@
       const po = i === 0 ? d.previsto_ontem : null;
       if (po) {
         const dentro = po.min != null && po.max != null && n >= po.min && n <= po.max;
-        const dif = n - po.media;
         const conferencia = dentro
-          ? `<span class="confere ok">Dentro do previsto ontem (${fmt(po.min, 1)} a ${fmt(po.max, 1)} m).</span>`
-          : `<span class="confere fora">${fmt(Math.abs(dif))} m ${dif > 0 ? "acima" : "abaixo"} do previsto ontem (${fmt(po.media)} m, faixa ${fmt(po.min, 1)} a ${fmt(po.max, 1)} m).</span>`;
+          ? `<span class="confere ok">A previsão de ontem acertou (${fmt(po.min, 1)} a ${fmt(po.max, 1)} m).</span>`
+          : `<span class="confere">Ontem a previsão para hoje era ${fmt(po.media, 1)} m.</span>`;
         texto += conferencia;
       }
       const icone = iconeTempo(d.codigo).split("</svg>")[0] + "</svg>";
       const distante = i >= 4;
+      const ate = d.pico_max ?? d.max; // até onde o rio deve ir no dia (pico), não só a média
       const faixa = po && po.min != null
         ? `<span class="faixa-prov" style="left:${x(po.min)};width:calc(${x(po.max)} - ${x(po.min)})"></span>`
-        : i === 0 || distante || d.min == null ? "" : `<span class="faixa-prov" style="left:${x(d.min)};width:calc(${x(d.max)} - ${x(d.min)})"></span>`;
-      const rotulo = po ? `Agora: ${fmt(n)} metros. Previsto ontem: ${fmt(po.media)} metros, entre ${fmt(po.min)} e ${fmt(po.max)}` : i === 0 ? `Agora: ${fmt(n)} metros` : distante ? `Tendência: perto de ${fmt(d.media, 1)} metros` : `Mais provável ${fmt(d.media)} metros; deve ficar entre ${fmt(d.min)} e ${fmt(d.max)}`;
-      const entre = i === 0 || distante || d.min == null ? "" : `<small class="entre">média do dia: mais provável entre ${fmt(d.min, 1)} e ${fmt(d.max, 1)} m${
-        d.pico != null && d.pico - d.media >= 0.1 ? `; pico perto de ${fmt(d.pico, 1)} m (até ${fmt(d.pico_max, 1)} m)` : ""}</small>`;
+        : i === 0 || distante || d.min == null ? "" : `<span class="faixa-prov" style="left:${x(d.min)};width:calc(${x(ate)} - ${x(d.min)})"></span>`;
+      const rotulo = po ? `Agora: ${fmt(n)} metros. Previsto ontem: ${fmt(po.media)} metros, entre ${fmt(po.min)} e ${fmt(po.max)}` : i === 0 ? `Agora: ${fmt(n)} metros` : distante ? `Tendência: perto de ${fmt(d.media, 1)} metros` : `Deve ficar entre ${fmt(d.min, 1)} e ${fmt(ate, 1)} metros`;
+      const entre = i === 0 || distante || d.min == null ? "" : `<small class="entre">Deve ficar entre ${fmt(d.min, 1)} e ${fmt(ate, 1)} m ao longo do dia.</small>`;
       return `<li class="impacto${i === 0 ? " hoje" : ""}" data-risco="${risco}">
         <div class="impacto-dia">${nome}<small>${dataCurta(d.data)}</small></div>
         <div class="impacto-chuva">${icone}<span>${d.chuva_mm != null ? `${fmt(d.chuva_mm, 0)} mm` : "–"}<small>${palavraChuva(d.chuva_mm, d.prob)}</small></span></div>
@@ -1108,17 +1108,12 @@
     ].filter(Boolean).join("\n");
   }
 
-  async function compartilhar() {
-    const texto = textoBoletim();
-    const botao = $("#compartilhar");
-    try {
-      if (navigator.share) { await navigator.share({ title: D.config.nome_app, text: texto, url: location.href }); return; }
-      await navigator.clipboard.writeText(`${texto}\n${location.href}`);
-      botao.textContent = "Boletim copiado";
-    } catch (_) {
-      botao.textContent = "Não foi possível copiar";
-    }
-    setTimeout(() => { botao.textContent = "Compartilhar boletim"; }, 2500);
+  // sem como mandar a imagem (computador): manda ou copia o texto do boletim
+  async function compartilharTexto(botao) {
+    const texto = `${textoBoletim()}\n${D.config.url_site || location.href.split("#")[0]}`;
+    if (navigator.share) { await navigator.share({ title: D.config.nome_app, text: texto }); return; }
+    await navigator.clipboard.writeText(texto);
+    botao.textContent = "Texto copiado: é só colar no WhatsApp";
   }
 
   // ------------------------------------------------------------ boletim em imagem (WhatsApp)
@@ -1190,15 +1185,10 @@
         await navigator.share({ files: [arquivo], text: texto });
         return;
       }
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url; link.download = arquivo.name;
-      document.body.appendChild(link); link.click(); link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-      botao.textContent = "Imagem baixada: é só mandar no WhatsApp";
+      await compartilharTexto(botao);
     } catch (e) {
       if (e?.name === "AbortError") return;
-      botao.textContent = "Não foi possível gerar a imagem";
+      botao.textContent = "Não foi possível compartilhar";
     }
     setTimeout(() => { botao.textContent = original; }, 3000);
   }
@@ -1250,7 +1240,6 @@
     $$("#alterna-grafico button").forEach((b) => b.addEventListener("click", () => mostrarGrafico(b.dataset.grafico)));
     $$("#camada-tempo button").forEach((b) => b.addEventListener("click", () => renderTempo(b.dataset.camada)));
     $("#mostrar-pontes").addEventListener("change", () => { if (typeof Chart !== "undefined") graficoHistorico(); });
-    $("#compartilhar").addEventListener("click", compartilhar);
     $("#boletim-imagem").addEventListener("click", boletimImagem);
     $("#imprimir-plano").addEventListener("click", () => window.print());
     $("#local-select").addEventListener("change", (ev) => {
