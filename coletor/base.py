@@ -189,6 +189,12 @@ def publicar(slug: str, saida: dict) -> Path:
     return destino
 
 
+def _bytes_sem_crlf(caminho: Path) -> bytes:
+    """Conteúdo com quebras de linha normalizadas: o mesmo arquivo dá a mesma versão no
+    Windows (CRLF) e no GitHub Actions (LF), e o carimbo não muda à toa."""
+    return caminho.read_bytes().replace(b"\r\n", b"\n")
+
+
 def carimbar_versao() -> bool:
     """Põe no index.html uma "versão" do estilo e do código (ex.: app.js?v=3f9a1c2e).
 
@@ -203,7 +209,7 @@ def carimbar_versao() -> bool:
         arquivo = PASTA_SITE / nome
         if not arquivo.exists():
             continue
-        versao = hashlib.sha1(arquivo.read_bytes()).hexdigest()[:8]
+        versao = hashlib.sha1(_bytes_sem_crlf(arquivo)).hexdigest()[:8]
         html = re.sub(r'(["\'])' + re.escape(nome) + r'(\?v=[0-9a-f]*)?(["\'])', r"\g<1>" + f"{nome}?v={versao}" + r"\g<3>", html)
     mudou = html != original
     if mudou:
@@ -212,8 +218,8 @@ def carimbar_versao() -> bool:
     # uma versão nova no sw.js, o navegador instala o novo e apaga os arquivos antigos
     sw = PASTA_SITE / "sw.js"
     if sw.exists():
-        partes = [html.encode("utf-8")] + [
-            (PASTA_SITE / n).read_bytes() for n in ("estilo.css", "app.js", "manifest.webmanifest") if (PASTA_SITE / n).exists()
+        partes = [html.encode("utf-8")] + [  # read_text já entrega o html com "\n"
+            _bytes_sem_crlf(PASTA_SITE / n) for n in ("estilo.css", "app.js", "manifest.webmanifest") if (PASTA_SITE / n).exists()
         ]
         versao = hashlib.sha1(b"".join(partes)).hexdigest()[:8]
         codigo = sw.read_text(encoding="utf-8")
