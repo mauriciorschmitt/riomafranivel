@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="estilo.css?v=37b04941">
+  <link rel="stylesheet" href="estilo.css?v=a1ffbaef">
 </head>
 <body>
   <div id="demo-aviso" class="demo-aviso" hidden>Demonstração com dados fictícios. Não use para decisões reais.</div>
@@ -65,12 +65,11 @@
           <div class="onde" id="onde">
             <label for="local-select" class="onde-titulo">Onde eu moro</label>
             <select id="local-select"><option value="">Escolha sua rua, bairro ou ponte</option></select>
-            <p class="onde-resultado" id="local-resultado">Escolha um lugar para saber a partir de que nível a água chega lá e se a previsão indica risco. A escolha fica guardada só neste aparelho.</p>
+            <p class="onde-resultado" id="local-resultado">Veja se a água pode chegar lá. A escolha fica salva só neste celular.</p>
           </div>
 
           <div class="acoes">
             <button type="button" class="botao botao-forte" id="boletim-imagem">Mandar boletim no WhatsApp</button>
-            <button type="button" class="botao" id="compartilhar">Copiar texto do boletim</button>
             <a class="botao" id="link-alertas" hidden target="_blank" rel="noopener">Receber alertas no Telegram</a>
             <button type="button" class="botao" id="instalar" hidden>Instalar no celular</button>
           </div>
@@ -79,12 +78,7 @@
 
         <div class="coluna-proximos">
         <h2 class="titulo-coluna">Próximos dias <span class="selo-teste" title="A previsão ainda está sendo avaliada pelo placar. O nível de agora é medido e confiável.">Previsão em teste</span></h2>
-        <p class="secao-nota">A barra azul mostra onde o rio deve ficar em cada dia. Se ela entra nas cores, o rio pode chegar às faixas de alerta da Defesa Civil. Do 4º dia em diante, a previsão de chuva ainda muda muito: o site mostra só a tendência.</p>
-        <p class="legenda" aria-hidden="true">
-          <span><i class="leg-faixa"></i> onde o rio deve ficar (faixa mais provável, até 3 dias)</span>
-          <span><i class="leg-media"></i> valor mais provável</span>
-          <span><i class="leg-agora"></i> nível de agora (na linha de hoje, sobre o que foi previsto ontem)</span>
-        </p>
+        <p class="secao-nota">A barra azul mostra até onde o rio deve ir em cada dia; as cores são as faixas de alerta. Do 4º dia em diante, só a tendência.</p>
         <ol class="impactos" id="impactos"></ol>
         </div>
       </div>
@@ -245,6 +239,6 @@
   <footer class="rodape" id="rodape"></footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js" crossorigin="anonymous"></script>
-  <script src="app.js?v=1887cd51"></script>
+  <script src="app.js?v=844c6ea0"></script>
 </body>
 </html>

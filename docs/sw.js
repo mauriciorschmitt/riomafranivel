@@ -17,7 +17,7 @@
    VERSAO é trocada pelo coletor (base.carimbar_versao) sempre que a página, o
    estilo ou o código mudam. Isso instala um service worker novo, que guarda
    os arquivos novos e apaga os caches antigos. */
-const VERSAO = "6ee028bd";
+const VERSAO = "b66fe437";
 const CACHE_APP = `regua-viva-app-${VERSAO}`;
 const CACHE_DADOS = "regua-viva-dados";
 const CACHE_FONTES = "regua-viva-fontes";
