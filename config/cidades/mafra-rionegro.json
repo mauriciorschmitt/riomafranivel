@@ -254,7 +254,7 @@
     "_nota_placar": "placar_desde: o placar só conta previsões feitas a partir desta data (versão atual do modelo). Troque quando o modelo mudar."
   },
   "alertas": {
-    "telegram_canal": ""
+    "telegram_canal": "@alertarionegro"
   },
   "contatos": {
     "_nota": "Itens sem telefone ou sem nome não aparecem. Abrigos: \"ordem\" é a ordem em que a prefeitura abre (1 = abre primeiro); \"mapa\" é o link do Google Maps (vira o botão Como chegar). \"mapas_abrigos\" tem um link de mapa por cidade.",
