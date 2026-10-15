@@ -29,9 +29,19 @@ Custo: zero. Não precisa de servidor, banco de dados, chave de API nem sensor p
 
 ## A previsão
 
-É uma regressão linear que aprende, com o histórico da própria estação, quanto o rio sobe ou desce de um dia para o outro em função de: nível atual, variação recente, chuva dos últimos dias e dos próximos, solo encharcado (índice de chuva antecedente) e, se houver, o nível de uma estação rio acima. O modelo roda dia a dia com a chuva prevista para montar os 7 dias.
+São dois modelos, combinados dia a dia:
 
-A faixa de incerteza vem de um teste retroativo: o modelo é aplicado no período de validação e o erro de cada horizonte vira a largura da faixa (80% dos casos). Como o teste usa a chuva que de fato caiu, a faixa é alargada para cobrir o erro da previsão do tempo (`fator_incerteza` e `crescimento_incerteza_dia`).
+- **Regressão linear**, que aprende com o histórico da própria estação quanto o rio sobe ou desce de um dia para o outro em função de: nível atual, variação dos últimos dias, chuva de amanhã até 5 dias atrás, solo encharcado (índice de chuva antecedente) e, se houver, o nível de uma estação rio acima. Ela roda dia a dia com a chuva prevista para montar os 7 dias. Acerta melhor o dia seguinte.
+- **Modelo hidrológico GR4J** (`coletor/hidrologico.py`), que transforma chuva em vazão guardando a água do solo e da calha, e converte a vazão em nível pela curva-chave tirada dos próprios dados. Ele "sabe" que a água de uma chuva forte continua chegando por dias, coisa que a regressão subestima. É calibrado com a vazão que a estação da ANA já informa e ajustado ao nível de agora antes de cada previsão. Precisa de `estacao.area_km2` (área de drenagem, no inventário da ANA).
+
+A regressão pesa mais nos primeiros dias, e o GR4J nos últimos (`PESOS_REGRESSAO` em `modelo.py`). Na cheia de outubro de 2026, a combinação errou de 10% a 21% menos que a regressão sozinha, conforme o dia à frente, e o viés de ficar abaixo do rio com chuva forte caiu pela metade.
+
+A faixa de incerteza vem de um teste retroativo: o modelo é aplicado no período de validação e o erro de cada horizonte vira a largura da faixa "mais provável" (metade dos casos). Como o teste usa a chuva que de fato caiu, a faixa é alargada para cobrir o erro da previsão do tempo (`fator_incerteza` e `crescimento_incerteza_dia`). Duas correções em cima disso:
+
+- **Viés:** no teste retroativo o modelo costuma ficar abaixo do rio quando chove muito. Uma parte desse viés (`correcao_vies`, padrão 0,5) é somada à linha central.
+- **Calibração pelo placar:** as previsões guardadas às 7h são conferidas com o que o rio fez. Se a faixa acertou bem menos (ou bem mais) que metade das vezes, ela é alargada (ou estreitada) sozinha, com cautela enquanto houver poucas conferências (`calibrar_faixa`).
+
+**Pico do dia.** O modelo principal prevê a média do dia, mas o que alaga a rua é a maior leitura. Um segundo modelo, menor, aprende quanto o pico passa da média (depende de o rio estar subindo, no topo ou descendo, e da chuva do dia). As chances de passar de cada cota da régua usam o pico.
 
 Enquanto não houver ao menos 120 dias de nível e chuva, o sistema usa coeficientes genéricos e o painel avisa que a previsão não está calibrada. Na primeira execução, o treino pede até 2 anos de telemetria à ANA; se a estação tiver esse histórico disponível, a previsão já sai calibrada no primeiro dia. Se não tiver, a base local vai crescendo a cada coleta.
 

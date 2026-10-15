@@ -112,7 +112,7 @@
       if (horas <= 48) partes.push(`No ritmo atual, chega a ${proxima.nome.toLowerCase()} (${fmt(proxima.cota)} m) em cerca de ${Math.max(1, Math.round(horas))} h.`);
     }
     const amanha = D.previsao_dias[1];
-    if (amanha?.min != null) partes.push(`Previsão para amanhã: entre ${fmt(amanha.min)} e ${fmt(amanha.max)} m.`);
+    if (amanha?.min != null) partes.push(`Previsão para amanhã: entre ${fmt(amanha.min)} e ${fmt(amanha.max)} m${textoPico(amanha)}.`);
     return partes.join(" ");
   }
 
@@ -129,6 +129,9 @@
     svg.innerHTML = `<path class="area" d="${d}L300,64L0,64Z"/><path class="linha" d="${d}"/>`;
     svg.setAttribute("aria-label", `Nível nas últimas 24 horas: de ${fmt(vals[0])} m para ${fmt(vals.at(-1))} m`);
   }
+
+  // o pico só vale a menção quando passa da média do dia de forma visível
+  const textoPico = (d) => (d?.pico != null && d.pico - d.media >= 0.1 ? `, com pico perto de ${fmt(d.pico)} m` : "");
 
   function estadoRio() {
     const t = D.atual.tendencia_cm_h;
@@ -574,7 +577,7 @@
     const inicioAlerta = faixas()[0]?.cota ?? 0; // marcos abaixo da 1ª faixa (ex.: leito normal) não são impacto
     const possiveis = marcos
       .filter((m) => m.cota > n && m.cota >= inicioAlerta)
-      .map((m) => ({ m, p: probs[Number(m.cota).toFixed(2)] ?? (d.media >= m.cota ? 1 : 0) }))
+      .map((m) => ({ m, p: probs[Number(m.cota).toFixed(2)] ?? ((d.pico ?? d.media) >= m.cota ? 1 : 0) }))
       // perto: vale mostrar possibilidades a partir de 10%; longe: só o que é provável (tendência)
       .filter((o) => o.p >= (distante ? 0.4 : 0.1));
     let texto = `<span class="nivel">${fmt(d.media)} m</span>`;
@@ -596,7 +599,7 @@
       risco = alvo.p < 0.3 ? "baixo" : st === "normal" ? "atencao" : st;
     } else {
       const atual = marcos.filter((m) => m.cota <= n).at(-1);
-      texto += atual && d.max < atual.cota
+      texto += atual && (d.pico_max ?? d.max) < atual.cota
         ? `Deve voltar para baixo do marco de ${fmt(atual.cota)} m (${esc(atual.titulo)}).`
         : "Nenhum marco novo deve ser atingido.";
     }
@@ -666,7 +669,8 @@
         ? `<span class="faixa-prov" style="left:${x(po.min)};width:calc(${x(po.max)} - ${x(po.min)})"></span>`
         : i === 0 || distante || d.min == null ? "" : `<span class="faixa-prov" style="left:${x(d.min)};width:calc(${x(d.max)} - ${x(d.min)})"></span>`;
       const rotulo = po ? `Agora: ${fmt(n)} metros. Previsto ontem: ${fmt(po.media)} metros, entre ${fmt(po.min)} e ${fmt(po.max)}` : i === 0 ? `Agora: ${fmt(n)} metros` : distante ? `Tendência: perto de ${fmt(d.media, 1)} metros` : `Mais provável ${fmt(d.media)} metros; deve ficar entre ${fmt(d.min)} e ${fmt(d.max)}`;
-      const entre = i === 0 || distante || d.min == null ? "" : `<small class="entre">mais provável entre ${fmt(d.min, 1)} e ${fmt(d.max, 1)} m</small>`;
+      const entre = i === 0 || distante || d.min == null ? "" : `<small class="entre">média do dia: mais provável entre ${fmt(d.min, 1)} e ${fmt(d.max, 1)} m${
+        d.pico != null && d.pico - d.media >= 0.1 ? `; pico perto de ${fmt(d.pico, 1)} m (até ${fmt(d.pico_max, 1)} m)` : ""}</small>`;
       return `<li class="impacto${i === 0 ? " hoje" : ""}" data-risco="${risco}">
         <div class="impacto-dia">${nome}<small>${dataCurta(d.data)}</small></div>
         <div class="impacto-chuva">${icone}<span>${d.chuva_mm != null ? `${fmt(d.chuva_mm, 0)} mm` : "–"}<small>${palavraChuva(d.chuva_mm, d.prob)}</small></span></div>
@@ -814,6 +818,12 @@
         <td>${x.n}</td></tr>`).join("")
     }</tbody></table>`);
     partes.push(`<p class="explica">Em verde, quando a previsão errou menos que o palpite. A faixa é a "mais provável": o rio deve cair dentro dela em cerca de metade dos dias. Bem menos que isso, ela está estreita demais; quase sempre, está larga demais.</p>`);
+    const fat = p.fatores_faixa || [];
+    if (fat.some((f) => Math.abs(f - 1) >= 0.05)) {
+      partes.push(`<p class="explica">Ajuste automático: com base nesse placar, a faixa de hoje está ${fat[0] >= 1 ? "alargada" : "estreitada"} (${fmt(fat[0])}× para amanhã, ${fmt(fat[2])}× para 3 dias), para voltar a acertar perto de metade das vezes.</p>`);
+    }
+    const hp = h.find((x) => x.erro_pico != null);
+    if (hp) partes.push(`<p class="explica">Pico do dia (a maior leitura, que é o que alaga a rua): previsto com ${hp.dias === 1 ? "1 dia" : `${hp.dias} dias`} de antecedência, errou em média ${cm(hp.erro_pico)} em ${hp.n_pico} dias.</p>`);
     if ((p.serie || []).length >= 3) partes.push(`<div class="grafico"><canvas id="graf-placar" aria-label="Previsto e observado, dia a dia"></canvas></div>`);
     el.innerHTML = partes.join("");
     if ((p.serie || []).length >= 3 && typeof Chart !== "undefined") {
@@ -1013,7 +1023,7 @@
     return [
       `${c.rio} em ${c.local}`,
       `${fmt(a.nivel)} m às ${hora(a.hora)} (${statusDe(a.nivel).nome}). ${tend}.`,
-      amanha?.min != null ? `Amanhã: entre ${fmt(amanha.min)} e ${fmt(amanha.max)} m.` : "",
+      amanha?.min != null ? `Amanhã: entre ${fmt(amanha.min)} e ${fmt(amanha.max)} m${textoPico(amanha)}.` : "",
       "Emergência: Defesa Civil 199",
     ].filter(Boolean).join("\n");
   }
