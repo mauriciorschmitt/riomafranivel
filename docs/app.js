@@ -1572,27 +1572,73 @@
     const instalado = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
     if (instalado) return;
     const botao = $("#instalar");
+    const dica = $("#dica-instalar");
+    const nav = qualNavegador();
     let pedido = null;
-    // Android e computador: o navegador avisa quando dá para instalar
+    // Chrome, Edge e afins avisam quando dá para instalar com um toque
     window.addEventListener("beforeinstallprompt", (ev) => {
       ev.preventDefault();
       pedido = ev;
-      botao.hidden = false;
     });
+    // o botão aparece em qualquer navegador; o que ele faz depende de qual é
+    botao.hidden = false;
     botao.addEventListener("click", async () => {
-      if (pedido) {
+      // no Samsung Internet a instalação direta às vezes é barrada ("app não instalado"):
+      // ali o botão mostra o caminho que sempre funciona, em vez de tentar instalar
+      if (pedido && nav.id !== "samsung") {
         pedido.prompt();
-        await pedido.userChoice.catch(() => null);
+        const escolha = await pedido.userChoice.catch(() => null);
         pedido = null;
-        botao.hidden = true;
-      } else {
-        $("#dica-instalar").hidden = false;
+        if (escolha?.outcome === "accepted") { botao.hidden = true; return; }
       }
+      dica.innerHTML = passosInstalar(nav);
+      dica.hidden = false;
+      dica.scrollIntoView({ block: "nearest", behavior: "smooth" });
     });
-    // iPhone: não há aviso automático; o botão mostra como fazer
-    const iphone = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    if (iphone) botao.hidden = false;
-    window.addEventListener("appinstalled", () => { botao.hidden = true; $("#dica-instalar").hidden = true; });
+    window.addEventListener("appinstalled", () => { botao.hidden = true; dica.hidden = true; });
+  }
+
+  // qual navegador é, para mostrar o passo certo de instalar
+  function qualNavegador() {
+    const ua = navigator.userAgent;
+    const ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const android = /Android/i.test(ua);
+    if (ios) return { id: /CriOS|FxiOS|EdgiOS|OPiOS/.test(ua) ? "ios-outro" : "ios-safari", ios, android };
+    if (/SamsungBrowser/.test(ua)) return { id: "samsung", ios, android };
+    if (/MiuiBrowser|XiaoMi/i.test(ua)) return { id: "xiaomi", ios, android };
+    if (/Firefox/.test(ua)) return { id: "firefox", ios, android };
+    if (/EdgA|Edg\//.test(ua)) return { id: "edge", ios, android };
+    if (/OPR|Opera/.test(ua)) return { id: "opera", ios, android };
+    if (/Chrome/.test(ua)) return { id: "chrome", ios, android };
+    return { id: "outro", ios, android };
+  }
+
+  // link que abre esta página no Chrome (Android), onde instalar funciona sem pedir autorização
+  function linkChrome() {
+    const sem = location.href.replace(/^https?:\/\//, "").split("#")[0];
+    return `intent://${sem}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(location.href)};end`;
+  }
+
+  function passosInstalar(nav) {
+    const b = (t) => `<strong>${t}</strong>`;
+    const passos = {
+      "ios-safari": [`Toque em ${b("Compartilhar")} (o quadrado com a seta, embaixo).`, `Role e toque em ${b("Adicionar à Tela de Início")}.`, `Toque em ${b("Adicionar")}.`],
+      "ios-outro": [`Toque no botão de ${b("compartilhar")} (o quadrado com a seta, na barra de endereço).`, `Toque em ${b("Adicionar à Tela de Início")}.`, `Se não aparecer, abra o site no ${b("Safari")} e faça por lá.`],
+      samsung: [`Toque no ${b("menu ☰")} (embaixo, à direita).`, `Toque em ${b("Adicionar página a")} e depois em ${b("Tela inicial")}.`],
+      xiaomi: [`Toque no ${b("menu")} e procure ${b("Adicionar à tela inicial")}.`],
+      firefox: [`Toque no ${b("menu ⋮")}.`, `Toque em ${b("Instalar")} ou ${b("Adicionar à tela inicial")}.`],
+      edge: [`Toque no ${b("menu …")} (embaixo).`, `Toque em ${b("Adicionar ao telefone")} ou ${b("Instalar aplicativo")}.`],
+      opera: [`Toque no ${b("menu ⋮")}.`, `Toque em ${b("Tela inicial")} ou ${b("Adicionar à tela inicial")}.`],
+      chrome: [`Toque no ${b("menu ⋮")} (em cima, à direita).`, `Toque em ${b("Instalar app")} ou ${b("Adicionar à tela inicial")}.`],
+      outro: [`No menu do navegador, procure ${b("Instalar")} ou ${b("Adicionar à tela inicial")}.`],
+    }[nav.id];
+    let html = `<strong>Para ter a Régua Viva na tela do celular:</strong><ol>${passos.map((p) => `<li>${p}</li>`).join("")}</ol>`;
+    if (nav.android && nav.id !== "chrome") {
+      html += `<p>Se aparecer ${b("“não foi possível instalar”")} ou um pedido para autorizar ${b("apps desconhecidos")}, não precisa autorizar: abra no Chrome e instale por lá.</p>
+        <a class="botao botao-pequeno" href="${esc(linkChrome())}">Abrir no Chrome</a>`;
+    }
+    html += `<p class="plano-ajuda">Não precisa instalar para usar: o site funciona igual no navegador.</p>`;
+    return html;
   }
 
   async function iniciar() {

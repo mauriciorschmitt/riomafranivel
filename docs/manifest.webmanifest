@@ -3,6 +3,7 @@
   "short_name": "Régua Viva",
   "description": "Nível do rio agora, o que deve acontecer nos próximos dias e o que fazer se a água subir.",
   "lang": "pt-BR",
+  "id": "./",
   "start_url": "./?origem=app",
   "scope": "./",
   "display": "standalone",
