@@ -255,6 +255,7 @@
   },
   "alertas": {
     "telegram_canal": "@alertarionegro",
+    "whatsapp_canal": "https://whatsapp.com/channel/0029VbDZSAI1Hspw37nRtH19",
     "boletins": {
       "normal": [7],
       "atencao": [7, 12, 18],
