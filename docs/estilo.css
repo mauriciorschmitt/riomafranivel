@@ -76,7 +76,9 @@ a { color: var(--agua); }
 }
 
 .offline-aviso { background: #F2C200; color: #121A1E; text-align: center; font-weight: 700; padding: 6px 12px; }
-.dica-instalar { font-size: 0.92rem; border-left: 4px solid var(--agua); padding: 4px 0 4px 10px; }
+.dica-instalar { font-size: 0.98rem; border-left: 4px solid var(--agua); padding: 6px 0 6px 12px; display: grid; gap: 8px; justify-items: start; }
+.dica-instalar ol { margin: 0; padding-left: 1.3em; display: grid; gap: 4px; }
+.dica-instalar p { margin: 0; }
 
 /* ---------- tarja (cabeçalho fixo) ---------- */
 .tarja { position: sticky; top: 0; z-index: 10; background: var(--tarja); color: var(--tarja-texto); padding-top: env(safe-area-inset-top, 0px); }
