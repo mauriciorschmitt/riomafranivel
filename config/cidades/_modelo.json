@@ -106,6 +106,7 @@
   },
   "alertas": {
     "telegram_canal": "",
+    "whatsapp_canal": "",
     "boletins": {
       "normal": [7],
       "atencao": [7, 12, 18],

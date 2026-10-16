@@ -260,6 +260,11 @@
     const canal = (D.config.alertas || {}).telegram_canal;
     const link = $("#link-alertas");
     if (canal) { link.href = `https://t.me/${canal.replace(/^@/, "")}`; link.hidden = false; }
+    // canal do WhatsApp: só aceita endereço de canal do próprio WhatsApp
+    const zap = (D.config.alertas || {}).whatsapp_canal || "";
+    const linkZap = $("#link-whatsapp");
+    linkZap.hidden = !/^https:\/\/(www\.)?whatsapp\.com\/channel\/[\w-]+$/.test(zap);
+    if (!linkZap.hidden) linkZap.href = zap;
 
     renderFazer(st);
     renderMarcos();
@@ -1301,7 +1306,7 @@
     g.font = fonteCond(700, 40); g.fillText(textoTendencia(a.tendencia_cm_h)[0], M + wFaixa + 28, yB + 316);
 
     // manchete, risco e próximo marco
-    const yDias = 958;
+    const yDias = 940;
     let y = yB + hB + 70;
     const [tit, sub] = manchete();
     g.fillStyle = IMG.tinta; g.font = fonteCond(800, 62);
@@ -1340,9 +1345,13 @@
     });
 
     // rodapé: site, canal de alertas e o 199
+    // site e canais em duas linhas; o endereço do canal do WhatsApp é longo demais: lá se acha pelo nome
+    const temZap = !!(c.alertas || {}).whatsapp_canal;
+    const alertas = canalAlertas() && temZap ? `Alertas no Telegram (t.me/${canalAlertas()}) e no canal do WhatsApp`
+      : canalAlertas() ? `Alertas no Telegram: t.me/${canalAlertas()}` : temZap ? "Alertas no canal do WhatsApp" : "";
     g.fillStyle = IMG.tinta; g.font = fonteTexto(700, 26);
-    g.fillText(siteDaCidade().replace(/^https?:\/\//, "").replace(/\/$/, ""), M, H - 132);
-    if (canalAlertas()) { g.textAlign = "right"; g.fillText(`Alertas: t.me/${canalAlertas()}`, W - M, H - 132); g.textAlign = "left"; }
+    g.fillText(`Previsão: ${siteDaCidade().replace(/^https?:\/\//, "").replace(/\/$/, "")}`, M, alertas ? H - 156 : H - 132);
+    if (alertas) { g.font = fonteTexto(400, 24); g.fillStyle = IMG.suave; g.fillText(alertas, M, H - 122); }
     g.fillStyle = IMG.vermelho; g.fillRect(0, H - 104, W, 104);
     g.fillStyle = "#FFFFFF"; g.font = fonteCond(800, 50); g.fillText("EMERGÊNCIA: DEFESA CIVIL 199", M, H - 36);
     return cv;

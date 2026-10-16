@@ -106,6 +106,7 @@ Cada arquivo em `config/cidades/` vira uma cidade no mesmo site, com um seletor 
 | `cheias_historicas` | Grandes cheias com data, cota e descrição |
 | `maximas_anuais_extra` | Anos que faltam na série da ANA (por exemplo, cheias anteriores à estação) |
 | `contatos` | Defesa Civil municipal e abrigos. Itens sem telefone ou sem nome não aparecem |
+| `alertas.whatsapp_canal` | Endereço do canal do WhatsApp (`https://whatsapp.com/channel/...`). Mostra o botão "Seguir no WhatsApp" e cita o canal no rodapé da imagem do boletim. O WhatsApp não deixa robô postar em canal: lá a publicação é manual (botão "Mandar boletim no WhatsApp") |
 | `o_que_fazer` | Opcional: troca o texto "O que fazer agora" de cada faixa, por exemplo `{"alerta": "..."}`. Sem ele, o site usa textos padrão |
 
 Os níveis de impacto, pontes e cheias de Rio Negro/Mafra no exemplo vieram de um painel de terceiros e **precisam ser conferidos com a Defesa Civil** antes de o site ir ao ar. Os contatos municipais estão em branco de propósito.
