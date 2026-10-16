@@ -667,3 +667,53 @@ def test_alerta_fica_pendente_e_sai_com_a_imagem(tmp_path, monkeypatch):
     # sem imagem (navegador indisponível), vai em texto
     monkeypatch.setattr(alertas.cartao, "imagem_boletim", lambda slug: None)
     assert alertas.enviar(saida, "oi") and enviados[-1][0] == "sendMessage"
+
+
+def _saida_alerta(faixa, gerado_em, hora_leitura, idade_min=20):
+    return {
+        "gerado_em": gerado_em, "demo": False,
+        "config": {"rio": "Rio Negro", "local": "Mafra", "url_site": "https://x/", "alertas": {"telegram_canal": "@c"}},
+        "atual": {"nivel": 6.3, "hora": hora_leitura, "idade_min": idade_min, "tendencia_cm_h": -1.6,
+                  "status": {"id": faixa, "nome": faixa.capitalize()}},
+        "previsao_dias": [{}, {"min": 5.9, "max": 6.1, "pico_max": 6.2}],
+    }
+
+
+def test_vez_do_boletim_por_faixa():
+    from coletor.alertas import vez_do_boletim
+    # Normal: uma vez por dia, às 7h; de madrugada ainda vale o de ontem
+    assert vez_do_boletim(_saida_alerta("normal", "2026-10-16T03:10", "2026-10-16T03:00")) == "2026-10-15 07h"
+    assert vez_do_boletim(_saida_alerta("normal", "2026-10-16T07:10", "2026-10-16T07:00")) == "2026-10-16 07h"
+    # Atenção: 7h, 12h e 18h; a coleta atrasada (12h40) ainda manda o das 12h
+    assert vez_do_boletim(_saida_alerta("atencao", "2026-10-16T12:40", "2026-10-16T12:00")) == "2026-10-16 12h"
+    # Alerta: a cada leitura nova
+    assert vez_do_boletim(_saida_alerta("alerta", "2026-10-16T12:40", "2026-10-16T12:00")) == "leitura 2026-10-16T12"
+    # a cidade pode desligar uma faixa
+    s = _saida_alerta("normal", "2026-10-16T08:00", "2026-10-16T08:00")
+    s["config"]["alertas"]["boletins"] = {"normal": []}
+    assert vez_do_boletim(s) is None
+
+
+def test_boletim_de_rotina_sem_som_e_mudanca_com_som(tmp_path, monkeypatch):
+    from coletor import alertas
+    monkeypatch.setattr(base, "PASTA_DADOS", tmp_path)
+    pendente = lambda: base.ler_json(base.pasta("x") / alertas.ARQUIVO_PENDENTE)  # noqa: E731
+    limpar = lambda: (base.pasta("x") / alertas.ARQUIVO_PENDENTE).unlink(missing_ok=True)  # noqa: E731
+    base.salvar_json(base.pasta("x") / "alerta.json", {"status": "alerta", "nivel": 6.4})
+
+    # Alerta, leitura das 12h: boletim de rotina, sem som
+    assert alertas.verificar("x", _saida_alerta("alerta", "2026-10-16T12:10", "2026-10-16T12:00")) is True
+    assert pendente()["silencioso"] is True and pendente()["texto"].startswith("🟠 Boletim das 12h")
+    limpar()
+    # a coleta das 12h40 ainda tem a leitura das 12h: não repete
+    assert alertas.verificar("x", _saida_alerta("alerta", "2026-10-16T12:40", "2026-10-16T12:00")) is False
+    # leitura nova das 13h: manda de novo
+    assert alertas.verificar("x", _saida_alerta("alerta", "2026-10-16T13:10", "2026-10-16T13:00")) is True
+    limpar()
+    # estação parada (leitura de 4 horas atrás): não manda boletim velho
+    assert alertas.verificar("x", _saida_alerta("alerta", "2026-10-16T18:10", "2026-10-16T14:00", idade_min=250)) is False
+    # baixou para Atenção: alerta com som, e ele conta como o boletim das 18h
+    assert alertas.verificar("x", _saida_alerta("atencao", "2026-10-16T18:40", "2026-10-16T18:00")) is True
+    assert pendente()["silencioso"] is False and "baixou para ATENCAO" in pendente()["texto"]
+    limpar()
+    assert alertas.verificar("x", _saida_alerta("atencao", "2026-10-16T19:10", "2026-10-16T19:00")) is False

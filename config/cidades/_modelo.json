@@ -105,7 +105,15 @@
     }
   },
   "alertas": {
-    "telegram_canal": ""
+    "telegram_canal": "",
+    "boletins": {
+      "normal": [7],
+      "atencao": [7, 12, 18],
+      "alerta": "toda_hora",
+      "emergencia": "toda_hora",
+      "extremo": "toda_hora"
+    },
+    "_nota_boletins": "Boletins de rotina no Telegram, SEM som, conforme a faixa do rio: lista de horas do dia (ex.: [7, 12, 18]) ou \"toda_hora\" (a cada leitura nova da estação). Lista vazia: sem boletim nessa faixa. A mudança de faixa sempre sai na hora, COM som."
   },
   "contatos": {
     "orgaos": [

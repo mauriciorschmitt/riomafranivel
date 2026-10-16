@@ -1,4 +1,12 @@
-"""Aviso no Telegram quando o rio muda de faixa (sobe ou desce).
+"""Telegram: alerta quando o rio muda de faixa e boletins de rotina.
+
+Dois tipos de mensagem, sempre com a imagem do boletim:
+  * MUDANÇA DE FAIXA (subiu para Alerta, baixou para Atenção...): na hora, COM som;
+  * BOLETIM DE ROTINA: SEM som (aparece no canal, mas não apita), com frequência
+    conforme a faixa. Padrão: Normal 1x por dia (7h), Atenção 3x (7h, 12h, 18h) e
+    Alerta, Emergência e Extremo a cada leitura nova (de hora em hora). A cidade
+    pode mudar em "alertas": {"boletins": {"normal": [7], "alerta": "toda_hora", ...}}.
+O som fica reservado para o que muda a situação; assim ninguém silencia o canal.
 
 Configuração (opcional):
   * Crie um bot com o @BotFather e um canal público; adicione o bot como admin.
@@ -17,6 +25,7 @@ quando precisa. Se a imagem falhar, o alerta vai só em texto.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import os
 import sys
 
@@ -25,6 +34,9 @@ import requests
 from . import base, cartao
 
 ARQUIVO_PENDENTE = "alerta_pendente.json"  # fica fora do repositório (.gitignore)
+ARQUIVO_BOLETINS = "boletins.json"         # o último boletim de rotina mandado (fica no repositório)
+BOLETINS_PADRAO = {"normal": [7], "atencao": [7, 12, 18], "alerta": "toda_hora", "emergencia": "toda_hora", "extremo": "toda_hora"}
+IDADE_MAXIMA_ROTINA_MIN = 180  # leitura mais velha que isso (estação parada): não manda boletim de rotina
 
 ICONE = {"normal": "🟢", "atencao": "🟡", "alerta": "🟠", "emergencia": "🔴", "extremo": "🟣"}
 
@@ -33,14 +45,26 @@ def _formatar(n: float, casas: int = 2) -> str:
     return f"{n:.{casas}f}".replace(".", ",")
 
 
-def mensagem(saida: dict, anterior: dict | None, teste: bool = False) -> str:
+ORDEM_FAIXAS = ["normal", "atencao", "alerta", "emergencia", "extremo"]
+
+
+def _subiu(anterior: dict | None, atual: dict) -> bool:
+    """Pela ordem das faixas (Atenção < Alerta...); sem faixa anterior, pelo nível."""
+    antes, agora = (anterior or {}).get("status"), atual["status"]["id"]
+    if antes in ORDEM_FAIXAS and agora in ORDEM_FAIXAS:
+        return ORDEM_FAIXAS.index(agora) > ORDEM_FAIXAS.index(antes)
+    return anterior is None or atual["nivel"] >= anterior.get("nivel", 0)
+
+
+def mensagem(saida: dict, anterior: dict | None, teste: bool = False, rotina: bool = False) -> str:
     cfg, atual = saida["config"], saida["atual"]
     st = atual["status"]
-    if teste:
-        verbo = "está em"
+    if rotina:
+        topo = f"Boletim das {int(atual['hora'][11:13])}h: {cfg['rio']} em {cfg['local']} está em {st['nome'].upper()}"
     else:
-        verbo = "subiu para" if anterior is None or atual["nivel"] >= anterior.get("nivel", 0) else "baixou para"
-    linhas = [f"{ICONE.get(st['id'], '')} {cfg['rio']} em {cfg['local']}: {verbo} {st['nome'].upper()}".strip()]
+        verbo = "está em" if teste else "subiu para" if _subiu(anterior, atual) else "baixou para"
+        topo = f"{cfg['rio']} em {cfg['local']}: {verbo} {st['nome'].upper()}"
+    linhas = [f"{ICONE.get(st['id'], '')} {topo}".strip()]
     nivel = f"Nível: {_formatar(atual['nivel'])} m às {atual['hora'][11:16]}"
     t = atual.get("tendencia_cm_h")
     if t is not None:
@@ -56,8 +80,8 @@ def mensagem(saida: dict, anterior: dict | None, teste: bool = False) -> str:
     return "\n".join(linhas)
 
 
-def enviar(saida: dict, texto: str, imagem: bytes | None = None) -> bool:
-    """Manda no canal da cidade: a imagem com `texto` de legenda, ou só o texto."""
+def enviar(saida: dict, texto: str, imagem: bytes | None = None, silencioso: bool = False) -> bool:
+    """Manda no canal da cidade: a imagem com `texto` de legenda, ou só o texto. Silencioso: sem som."""
     token = os.environ.get("TELEGRAM_TOKEN")
     canal = (saida["config"].get("alertas") or {}).get("telegram_canal")
     if not token or not canal:
@@ -66,10 +90,10 @@ def enviar(saida: dict, texto: str, imagem: bytes | None = None) -> bool:
     api = f"https://api.telegram.org/bot{token}"
     try:
         if imagem:
-            r = requests.post(f"{api}/sendPhoto", data={"chat_id": canal, "caption": texto[:1024]},
+            r = requests.post(f"{api}/sendPhoto", data={"chat_id": canal, "caption": texto[:1024], "disable_notification": "true" if silencioso else "false"},
                               files={"photo": ("boletim.png", imagem, "image/png")}, timeout=60)
         else:
-            r = requests.post(f"{api}/sendMessage", json={"chat_id": canal, "text": texto}, timeout=20)
+            r = requests.post(f"{api}/sendMessage", json={"chat_id": canal, "text": texto, "disable_notification": silencioso}, timeout=20)
     except requests.RequestException as erro:
         print(f"     aviso: Telegram falhou ({type(erro).__name__})")  # sem a URL: ela contém o token
         return False
@@ -82,17 +106,49 @@ def enviar(saida: dict, texto: str, imagem: bytes | None = None) -> bool:
     return r.ok
 
 
+def vez_do_boletim(saida: dict) -> str | None:
+    """Qual boletim de rotina vale agora. Muda de valor quando é hora de mandar outro.
+
+    Com horários fixos ([7, 12, 18]) é o último horário que já passou: se a coleta
+    das 12h atrasar, o boletim sai às 12h40, e não se perde. Com "toda_hora" é a
+    hora da leitura: só sai boletim quando chega leitura nova da estação.
+    """
+    st = saida["atual"]["status"]["id"]
+    regras = {**BOLETINS_PADRAO, **((saida["config"].get("alertas") or {}).get("boletins") or {})}
+    regra = regras.get(st)
+    if regra == "toda_hora":
+        return f"leitura {saida['atual']['hora'][:13]}"
+    horas = sorted(int(h) for h in (regra or []))
+    if not horas:
+        return None
+    agora = dt.datetime.fromisoformat(saida["gerado_em"])
+    passadas = [h for h in horas if h <= agora.hour]
+    if passadas:
+        return f"{agora.date().isoformat()} {passadas[-1]:02d}h"
+    return f"{(agora.date() - dt.timedelta(days=1)).isoformat()} {horas[-1]:02d}h"
+
+
 def verificar(slug: str, saida: dict) -> bool:
+    """Marca para envio (passo "--pendentes") o alerta de mudança de faixa ou o boletim de rotina."""
     caminho = base.pasta(slug) / "alerta.json"
     anterior = base.ler_json(caminho)
     atual = saida["atual"]
     base.salvar_json(caminho, {"status": atual["status"]["id"], "nivel": atual["nivel"], "hora": atual["hora"]})
-    if saida.get("demo") or (anterior and anterior.get("status") == atual["status"]["id"]):
+    if saida.get("demo"):
         return False
-    if anterior is None:
-        return False  # primeira execução: só registra o estado
-    # o envio (com a imagem) fica para o passo "--pendentes"
-    base.salvar_json(base.pasta(slug) / ARQUIVO_PENDENTE, {"texto": mensagem(saida, anterior), "hora": atual["hora"]})
+    caminho_boletins = base.pasta(slug) / ARQUIVO_BOLETINS
+    ultimo = (base.ler_json(caminho_boletins) or {}).get("vez")
+    vez = vez_do_boletim(saida)
+    mudou = anterior is not None and anterior.get("status") != atual["status"]["id"]
+    if mudou:
+        pendente = {"texto": mensagem(saida, anterior), "silencioso": False}
+    elif vez and vez != ultimo and atual.get("idade_min", 0) <= IDADE_MAXIMA_ROTINA_MIN:
+        pendente = {"texto": mensagem(saida, None, rotina=True), "silencioso": True}
+    else:
+        return False
+    # o alerta também conta como o boletim desta vez: não sai um boletim repetido logo depois
+    base.salvar_json(caminho_boletins, {"vez": vez, "hora": atual["hora"]})
+    base.salvar_json(base.pasta(slug) / ARQUIVO_PENDENTE, {**pendente, "hora": atual["hora"]})
     return True
 
 
@@ -112,8 +168,10 @@ def enviar_pendentes() -> int:
         if not pendente:
             continue
         saida = _boletim_publicado(slug)
-        ok = bool(saida) and enviar(saida, pendente["texto"], cartao.imagem_boletim(slug))
-        print(f"[{'ok' if ok else 'erro'}] {slug}: alerta {'enviado' if ok else 'não enviado'}")
+        silencioso = bool(pendente.get("silencioso"))
+        ok = bool(saida) and enviar(saida, pendente["texto"], cartao.imagem_boletim(slug), silencioso)
+        tipo = "boletim de rotina (sem som)" if silencioso else "alerta de mudança de faixa"
+        print(f"[{'ok' if ok else 'erro'}] {slug}: {tipo} {'enviado' if ok else 'não enviado'}")
         falhas += not ok
         caminho.unlink(missing_ok=True)  # não reenviar o mesmo alerta na próxima coleta
     return falhas
