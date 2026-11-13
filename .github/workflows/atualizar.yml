@@ -43,5 +43,12 @@ jobs:
           git add docs dados
           git diff --cached --quiet && exit 0
           git commit -m "Dados: $(date -u +'%Y-%m-%d %H:%M') UTC"
-          git pull --rebase --autostash
-          git push
+          # outra mudança pode chegar ao repositório no mesmo instante (um arquivo
+          # enviado, outra coleta): tenta de novo algumas vezes antes de desistir
+          for tentativa in 1 2 3; do
+            if git pull --rebase --autostash && git push; then exit 0; fi
+            git rebase --abort 2>/dev/null || true
+            sleep $((tentativa * 15))
+          done
+          # não deu: os dados desta rodada ficam de fora, mas a próxima coleta busca de novo
+          echo "::warning::Não consegui salvar os dados desta coleta (o repositório mudou ao mesmo tempo). A próxima coleta busca tudo de novo."
