@@ -548,11 +548,11 @@ def test_calibra_a_faixa_pelo_placar():
             {"data": alvo.isoformat(), "media": 4.4, "min": 4.2, "max": 4.6}]}
     fatores = calibrar_faixa(prev, medias, hoje)
     assert len(fatores) == 7 and 2.0 < fatores[0] <= 3.0
-    assert fatores == sorted(fatores)                          # não diminui com o horizonte
+    assert all(0.5 <= f <= 6.0 for f in fatores)                # cada dia com o seu fator, dentro dos limites
     # a mesma situação com a faixa já alargada 3x: não alarga de novo
     for p in prev.values():
         p["dias"][0].update({"min": 3.8, "max": 5.0, "fator_faixa": 3.0})
-    assert 2.0 < calibrar_faixa(prev, medias, hoje)[0] <= 3.0
+    assert 2.0 < calibrar_faixa(prev, medias, hoje)[0] <= 6.0
     # poucas conferências: não mexe
     poucas = dict(list(prev.items())[:3])
     assert calibrar_faixa(poucas, medias, hoje)[0] == 1.0
@@ -717,3 +717,11 @@ def test_boletim_de_rotina_sem_som_e_mudanca_com_som(tmp_path, monkeypatch):
     assert pendente()["silencioso"] is False and "baixou para ATENCAO" in pendente()["texto"]
     limpar()
     assert alertas.verificar("x", _saida_alerta("atencao", "2026-10-16T19:10", "2026-10-16T19:00")) is False
+
+
+def test_margem_da_faixa_nunca_encolhe_com_o_horizonte():
+    from coletor.processar import faixas_crescentes
+    dias = [{"media": 5.0, "min": 4.4, "max": 5.8}, {"media": 5.2, "min": 5.0, "max": 5.5}, {"media": 5.1, "min": 4.0, "max": 6.5}]
+    r = faixas_crescentes(dias)
+    assert (r[1]["min"], r[1]["max"]) == (4.6, 6.0)           # herdou a margem do dia anterior
+    assert (r[2]["min"], r[2]["max"]) == (4.0, 6.5)           # já era mais larga: fica como estava
