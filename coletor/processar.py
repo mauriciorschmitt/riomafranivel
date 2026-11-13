@@ -115,8 +115,8 @@ def comparar_chuva(previsoes: dict, chuva_obs: dict, hoje: dt.date, desde: str =
 
 
 MIN_CALIBRACAO = 5     # previsões conferidas, por dia à frente, para começar a mexer na faixa
-PESO_CALIBRACAO = 15   # com poucas conferências o fator fica perto de 1 (encolhe para 1)
-LIMITES_FATOR_FAIXA = (0.7, 3.0)
+PESO_CALIBRACAO = 5    # com poucas conferências o fator fica perto de 1 (com 5 conferências, anda metade do caminho)
+LIMITES_FATOR_FAIXA = (0.5, 6.0)
 
 
 def calibrar_faixa(previsoes: dict, medias_diarias: dict, hoje: dt.date, desde: str = "") -> list[float]:
@@ -150,10 +150,23 @@ def calibrar_faixa(previsoes: dict, medias_diarias: dict, hoje: dt.date, desde: 
         n = len(razoes)
         fator = 1.0 + (bruto - 1.0) * n / (n + PESO_CALIBRACAO)
         fatores.append(round(min(LIMITES_FATOR_FAIXA[1], max(LIMITES_FATOR_FAIXA[0], fator)), 2))
-    # a incerteza não diminui com o horizonte
-    for k in range(1, len(fatores)):
-        fatores[k] = max(fatores[k], fatores[k - 1])
+    # Cada dia à frente com o seu fator: o de amanhã costuma precisar de mais (a faixa
+    # do modelo é estreita demais) e o da semana de menos. Quem não pode encolher com
+    # o horizonte é a LARGURA em metros, garantida depois em `faixas_crescentes`.
     return fatores
+
+
+def faixas_crescentes(diaria: list[dict]) -> list[dict]:
+    """A margem da faixa (para cima e para baixo, em metros) nunca diminui com o horizonte."""
+    abaixo = acima = 0.0
+    for d in diaria:
+        if None in (d.get("media"), d.get("min"), d.get("max")):
+            continue
+        abaixo = max(abaixo, d["media"] - d["min"])
+        acima = max(acima, d["max"] - d["media"])
+        d["min"] = round(max(0.0, d["media"] - abaixo), 2)
+        d["max"] = round(d["media"] + acima, 2)
+    return diaria
 
 
 def placar(previsoes: dict, medias_diarias: dict, hoje: dt.date, desde: str = "",
@@ -291,6 +304,7 @@ def processar(config: dict, bruto: dict, modelo: dict, maximas_anuais: dict[int,
         ),
         cenarios_chuva=bruto.get("chuva_conjunto"),
     )
+    diaria = faixas_crescentes(diaria)
     horaria = mod.projecao_horaria(ultima["hora"], ultima["nivel"], tendencia or 0.0, diaria, horas=48)
 
     dias_previsao = []
