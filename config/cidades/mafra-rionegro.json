@@ -21,9 +21,9 @@
     {
       "estacao_copel": "Fragosos",
       "nome": "Fragosos",
-      "atraso_horas": 48,
+      "atraso_horas": 28,
       "offset_m": 0.0,
-      "_nota": "Estação rio acima, lida do site da COPEL. O treino mede o atraso real e só usa a estação se ela melhorar a previsão."
+      "_nota": "Estação rio acima, lida do site da COPEL. Atraso medido nas cheias de out/nov/2026: o pico chega a Rio Negro cerca de 28 h depois."
     }
   ],
   "bacia": {
@@ -257,8 +257,14 @@
     "telegram_canal": "@alertarionegro",
     "whatsapp_canal": "https://whatsapp.com/channel/0029VbDZSAI1Hspw37nRtH19",
     "boletins": {
-      "normal": [7],
-      "atencao": [7, 12, 18],
+      "normal": [
+        7
+      ],
+      "atencao": [
+        7,
+        12,
+        18
+      ],
       "alerta": "toda_hora",
       "emergencia": "toda_hora",
       "extremo": "toda_hora"
