@@ -31,7 +31,8 @@ def atualizar_telemetria(slug: str, nome_arquivo: str, agora: dt.datetime, aviso
     try:
         novas = buscar(recente)
     except RuntimeError as erro:
-        avisos.append(f"{rotulo}: {erro}. Usando dados guardados.")
+        print(f"     detalhe: {rotulo}: {erro}")
+        avisos.append(f"{rotulo} não respondeu nesta atualização; o site usou as leituras já guardadas.")
         novas = []
     todas = base.mesclar_leituras(antigas, novas, agora)
     base.salvar_leituras(caminho, todas)
@@ -87,7 +88,7 @@ def gerar_cidade(slug: str) -> dict:
             slug, "telemetria.csv", agora, avisos, buscador_copel(cliente_copel, est["copel"], agora), f"COPEL {est['copel']}"
         )
         if telemetria and telemetria[-1]["hora"] != antes:
-            avisos.append(f"ANA atrasada; última leitura veio da COPEL ({est['copel']}).")
+            avisos.append("A ANA está sem dados novos; a última leitura veio da COPEL, que mede a mesma régua.")
 
     montante = {}
     for m in config.get("montante", []):
@@ -103,7 +104,8 @@ def gerar_cidade(slug: str) -> dict:
     try:
         previsao = openmeteo.previsao_bacia(config["bacia"]["pontos"])
     except RuntimeError as erro:
-        avisos.append(f"Open-Meteo: {erro}")
+        print(f"     detalhe: Open-Meteo: {erro}")
+        avisos.append("A previsão do tempo não respondeu nesta atualização; a previsão do rio pode estar menos precisa.")
         previsao = PREVISAO_VAZIA
     chuva = atualizar_chuva(slug, previsao, agora.date())
 
@@ -111,13 +113,14 @@ def gerar_cidade(slug: str) -> dict:
     try:
         conjunto = openmeteo.chuva_conjunto(config["bacia"]["pontos"]) or None
     except (RuntimeError, KeyError, ValueError) as erro:
-        avisos.append(f"Previsão de chuva por conjunto indisponível ({erro}); a chance usa só a previsão principal.")
+        print(f"     detalhe: conjunto de chuva: {erro}")
+        avisos.append("As versões da previsão de chuva não responderam nesta atualização; a previsão usa só a chuva principal.")
 
     glofas = None
     try:
         glofas = openmeteo.vazao_glofas(config["estacao"]["lat"], config["estacao"]["lon"])
     except RuntimeError as erro:
-        avisos.append(f"GloFAS: {erro}")
+        print(f"     detalhe: GloFAS: {erro}")  # só referência: não precisa aparecer no site
 
     modelo = base.ler_json(base.pasta(slug) / "modelo.json")
     if not mod.compativel(modelo):
