@@ -1191,7 +1191,7 @@
       `<p>Este painel é informativo e não substitui os alertas oficiais. Em situação de risco, siga a Defesa Civil.</p>`,
     ];
     if (c.repositorio) partes.push(`<p>Código aberto e gratuito: <a href="${esc(c.repositorio)}">${esc(c.repositorio.replace(/^https?:\/\//, ""))}</a>. Use na sua cidade.</p>`);
-    if (D.avisos?.length) partes.push(`<p>Avisos da última coleta: ${D.avisos.map(esc).join(" ")}</p>`);
+    if (D.avisos?.length) partes.push(`<p>Nesta atualização: ${D.avisos.map(esc).join(" ")}</p>`);
     $("#rodape").innerHTML = partes.join("");
   }
 
