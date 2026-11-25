@@ -4880,5 +4880,95 @@
         "chuva_principal_mm": 19.6
       }
     ]
+  },
+  "2026-11-25": {
+    "emitida": "2026-11-25T07:00",
+    "nivel_atual": 3.13,
+    "dias": [
+      {
+        "data": "2026-11-26",
+        "media": 3.4,
+        "min": 3.12,
+        "max": 3.95,
+        "pico": 3.52,
+        "pico_max": 4.12,
+        "fator_faixa": 3.54,
+        "prob_inundacao": 0.033,
+        "chuva_mm": 18.7,
+        "chuva_principal_mm": 21.8
+      },
+      {
+        "data": "2026-11-27",
+        "media": 3.68,
+        "min": 3.1,
+        "max": 4.8,
+        "pico": 3.81,
+        "pico_max": 5.01,
+        "fator_faixa": 2.17,
+        "prob_inundacao": 0.07,
+        "chuva_mm": 3.8,
+        "chuva_principal_mm": 2.8
+      },
+      {
+        "data": "2026-11-28",
+        "media": 3.95,
+        "min": 3.28,
+        "max": 5.2,
+        "pico": 4.08,
+        "pico_max": 5.37,
+        "fator_faixa": 1.27,
+        "prob_inundacao": 0.075,
+        "chuva_mm": 25.0,
+        "chuva_principal_mm": 13.9
+      },
+      {
+        "data": "2026-11-29",
+        "media": 4.32,
+        "min": 3.36,
+        "max": 5.57,
+        "pico": 4.48,
+        "pico_max": 5.83,
+        "fator_faixa": 1.03,
+        "prob_inundacao": 0.122,
+        "chuva_mm": 4.8,
+        "chuva_principal_mm": 2.7
+      },
+      {
+        "data": "2026-11-30",
+        "media": 4.51,
+        "min": 3.55,
+        "max": 5.79,
+        "pico": 4.66,
+        "pico_max": 6.01,
+        "fator_faixa": 0.7,
+        "prob_inundacao": 0.088,
+        "chuva_mm": 3.4,
+        "chuva_principal_mm": 1.4
+      },
+      {
+        "data": "2026-12-01",
+        "media": 4.59,
+        "min": 3.63,
+        "max": 6.24,
+        "pico": 4.64,
+        "pico_max": 6.31,
+        "fator_faixa": 0.86,
+        "prob_inundacao": 0.158,
+        "chuva_mm": 1.4,
+        "chuva_principal_mm": 2.4
+      },
+      {
+        "data": "2026-12-02",
+        "media": 4.11,
+        "min": 3.15,
+        "max": 5.76,
+        "pico": 4.31,
+        "pico_max": 5.98,
+        "fator_faixa": 0.78,
+        "prob_inundacao": 0.106,
+        "chuva_mm": 1.9,
+        "chuva_principal_mm": 7.4
+      }
+    ]
   }
 }
